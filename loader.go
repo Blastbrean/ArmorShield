@@ -3,46 +3,44 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"net"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/vmihailenco/msgpack"
+	"github.com/ztrue/tracerr"
 	"golang.org/x/sync/errgroup"
 	"nhooyr.io/websocket"
 )
 
-// A client represents a connection to the loader.
-// Messages are queued in a channel to the client from the server.
-// If they're too slow to keep up with the messages, they'll be removed.
-type client struct {
-	msgs      chan []byte
-	closeSlow func()
-}
-
 // The loader server represents the server that clients will connect to.
-type loaderServer struct {
+type LoaderServer struct {
 	// The "messageBufferLimit" controls the max number of messages that can be queued for one client.
 	// Once they exceed this limit, they are kicked from the server.
 	// Defaults to 16.
-	messageBufferLimit int
+	MessageBufferLimit int
+
+	// The "readLimitBytes" controls the max number bytes that will be read for one client.
+	// Defaults to 4096.
+	ReadLimitBytes int
 
 	// List of clients.
-	clientMutex sync.Mutex
-	clients     map[*client]struct{}
+	ClientMutex sync.Mutex
+	Clients     map[*Client]struct{}
 }
 
 // This function constructs a loaderServer with the default values.
-func newLoaderServer() *loaderServer {
-	return &loaderServer{
-		messageBufferLimit: 16,
-		clients:            make(map[*client]struct{}),
+func newLoaderServer() *LoaderServer {
+	return &LoaderServer{
+		MessageBufferLimit: 16,
+		ReadLimitBytes:     4096,
+		Clients:            make(map[*Client]struct{}),
 	}
 }
 
 // This function accepts the WebSocket connection and then adds it to the list of all clients.
-func (ls *loaderServer) subscribeHandler(w http.ResponseWriter, r *http.Request) error {
+func (ls *LoaderServer) subscribeHandler(w http.ResponseWriter, r *http.Request) error {
 	err := ls.subscribe(r.Context(), w, r)
 
 	if errors.Is(err, context.Canceled) {
@@ -54,42 +52,55 @@ func (ls *loaderServer) subscribeHandler(w http.ResponseWriter, r *http.Request)
 		return nil
 	}
 
-	return err
+	return tracerr.Wrap(err)
 }
 
-// This listens for new messages sent by the client and handles them.
+// This listens for new packets sent by the client and handles them.
 // If we don't recieve a new message within 10 seconds, we'll drop the client.
-func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.Conn) error {
+func (ls *LoaderServer) readPump(ctx context.Context, cl *Client, c *websocket.Conn) error {
 	defer c.CloseNow()
 
 	for {
 		ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 		defer cancel()
 
-		mt, arr, err := c.Read(ctx)
+		_, rr, err := c.Reader(ctx)
 		if err != nil {
-			return err
+			return tracerr.Wrap(err)
 		}
 
-		log.Println(mt, arr)
+		arr := make([]byte, ls.ReadLimitBytes)
+		_, err = rr.Read(arr)
+		if err != nil {
+			return tracerr.Wrap(err)
+		}
 
-		cl.msgs <- []byte{0x00, 0x01}
+		var packet Packet
+		err = msgpack.Unmarshal(arr, &packet)
+		if err != nil {
+			return tracerr.Wrap(err)
+		}
+
+		err = cl.handlePacket(packet)
+		if err != nil {
+			return tracerr.Wrap(err)
+		}
 	}
 }
 
 // This listens for new messages written to the buffer and writes them to the WebSocket.
-func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.Conn) error {
+func (ls *LoaderServer) writePump(ctx context.Context, cl *Client, c *websocket.Conn) error {
 	defer c.CloseNow()
 
 	for {
 		select {
-		case msg := <-cl.msgs:
-			err := writeTimeout(ctx, time.Second*5, c, msg)
+		case pk := <-cl.Packets:
+			err := writeTimeout(ctx, time.Second*5, c, pk)
 			if err != nil {
-				return err
+				return tracerr.Wrap(err)
 			}
 		case <-ctx.Done():
-			return ctx.Err()
+			return tracerr.Wrap(ctx.Err())
 		}
 	}
 }
@@ -99,14 +110,14 @@ func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.
 // After that, it's registered into the list as a real client and creates a reader and writer pump.
 // Once those reader and writer pumps are created, we wait for them to error or end.
 // If the context is cancelled or an error occurs, it returns and deletes the client.
-func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+func (ls *LoaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	var mu sync.Mutex
 	var c *websocket.Conn
 	var closed bool
 
-	cl := &client{
-		msgs: make(chan []byte, ls.messageBufferLimit),
-		closeSlow: func() {
+	cl := &Client{
+		Packets: make(chan Packet, ls.MessageBufferLimit),
+		CloseSlow: func() {
 			mu.Lock()
 			defer mu.Unlock()
 			closed = true
@@ -121,14 +132,14 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 
 	c2, err := websocket.Accept(w, r, nil)
 	if err != nil {
-		return err
+		return tracerr.Wrap(err)
 	}
 
 	mu.Lock()
 
 	if closed {
 		mu.Unlock()
-		return net.ErrClosed
+		return tracerr.Wrap(net.ErrClosed)
 	}
 
 	c = c2
@@ -137,45 +148,50 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 
 	errs, ctx := errgroup.WithContext(ctx)
 
-	errs.Go(func() error { return ls.readPump(ctx, cl, c) })
-	errs.Go(func() error { return ls.writePump(ctx, cl, c) })
+	errs.Go(func() error { return tracerr.Wrap(ls.readPump(ctx, cl, c)) })
+	errs.Go(func() error { return tracerr.Wrap(ls.writePump(ctx, cl, c)) })
 
 	return errs.Wait()
 }
 
-// This function publishes a message to all clients.
-// It never blocks and so messages to slow subscribers are dropped.
-func (ls *loaderServer) publish(msg []byte) {
-	ls.clientMutex.Lock()
-	defer ls.clientMutex.Unlock()
+// This function publishes a packet to all clients.
+// It never blocks and so packets to slow subscribers are dropped.
+func (ls *LoaderServer) publish(pk Packet) {
+	ls.ClientMutex.Lock()
+	defer ls.ClientMutex.Unlock()
 
-	for cl := range ls.clients {
+	for cl := range ls.Clients {
 		select {
-		case cl.msgs <- msg:
+		case cl.Packets <- pk:
 		default:
-			go cl.closeSlow()
+			go cl.CloseSlow()
 		}
 	}
 }
 
 // This function adds a new client to the map.
-func (ls *loaderServer) addClient(cl *client) {
-	ls.clientMutex.Lock()
-	ls.clients[cl] = struct{}{}
-	ls.clientMutex.Unlock()
+func (ls *LoaderServer) addClient(cl *Client) {
+	ls.ClientMutex.Lock()
+	ls.Clients[cl] = struct{}{}
+	ls.ClientMutex.Unlock()
 }
 
 // This function removes a new client from the map.
-func (ls *loaderServer) deleteClient(cl *client) {
-	ls.clientMutex.Lock()
-	delete(ls.clients, cl)
-	ls.clientMutex.Unlock()
+func (ls *LoaderServer) deleteClient(cl *Client) {
+	ls.ClientMutex.Lock()
+	delete(ls.Clients, cl)
+	ls.ClientMutex.Unlock()
 }
 
 // This function writes to a specified WebSocket connection and can time out with a specified duration.
-func writeTimeout(ctx context.Context, timeout time.Duration, c *websocket.Conn, msg []byte) error {
+func writeTimeout(ctx context.Context, timeout time.Duration, c *websocket.Conn, pk Packet) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+
+	msg, err := msgpack.Marshal(pk)
+	if err != nil {
+		return tracerr.Wrap(err)
+	}
 
 	return c.Write(ctx, websocket.MessageText, msg)
 }
