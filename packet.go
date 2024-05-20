@@ -21,6 +21,9 @@ const (
 // Packet identifiers.
 const (
 	PacketIdHandshake = iota
+	PacketIdReport
+	PacketIdHeartbeat
+	PacketIdIdentify
 )
 
 // Packet type identifiers

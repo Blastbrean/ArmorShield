@@ -11,9 +11,10 @@ func main() {
 	app := pocketbase.New()
 
 	ls := loaderServer{
+		app:                app,
 		logger:             app.Logger().WithGroup("ls"),
 		messageBufferLimit: 16,
-		readLimitBytes:     4096,
+		readLimitBytes:     16380,
 		clients:            make(map[*client]struct{}),
 	}
 

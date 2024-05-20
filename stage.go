@@ -18,4 +18,5 @@ type rawStageHandler interface {
 const (
 	ClientStageRawBoot = iota
 	ClientStageNormalHandshake
+	ClientStageIdentify
 )

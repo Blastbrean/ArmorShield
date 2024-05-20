@@ -3,30 +3,42 @@ package main
 import (
 	"time"
 
+	"github.com/pocketbase/pocketbase"
 	"github.com/vmihailenco/msgpack"
 	"github.com/ztrue/tracerr"
 )
 
-// Client version.
-const ClientVersion = 1
+// Version numbers for the SWS protocol.
+const (
+	VersionSWS100 = iota + 0x64
+)
 
 // A client represents a connection to the loader.
 // Packets and messages are queued in a channel to the client from the server.
 // If they're too slow to keep up with the packets or messages, they'll be removed.
 type client struct {
+	app *pocketbase.PocketBase
+
 	timestampTicker *time.Ticker
 	heartbeatTicker *time.Ticker
 
 	timestamp int64
 	subId     [16]byte
 
-	rawStageHandler    rawStageHandler
-	normalStageHandler normalStageHandler
-	currentStage       byte
+	heartbeatStageHandler *heartbeatHandler
+	reportStageHandler    *reportHandler
+	rawStageHandler       rawStageHandler
+	normalStageHandler    normalStageHandler
+	currentStage          byte
 
-	rawPackets chan rawPacket
-	packets    chan packet
-	closeSlow  func()
+	rawPackets     chan rawPacket
+	packets        chan packet
+	sequenceNumber uint64
+
+	getRemoteAddr func() string
+
+	closeNormal func(rn string)
+	closeSlow   func()
 }
 
 // Send raw packet.
@@ -41,9 +53,9 @@ func (cl *client) sendRawPacket(id byte, da interface{}) error {
 	return nil
 }
 
-// Send packet.
-func (cl *client) sendPacket(id byte, da interface{}) error {
-	msg, err := msgpack.Marshal(da)
+// Send packet with user provided marshal function.
+func (cl *client) sendPacket(id byte, marshaler func(interface{}) ([]byte, error), da interface{}) error {
+	msg, err := marshaler(da)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
@@ -52,6 +64,11 @@ func (cl *client) sendPacket(id byte, da interface{}) error {
 	cl.packets <- packet{timestamp: cl.timestamp, subId: cl.subId, rawPacket: rpk}
 
 	return nil
+}
+
+// Send packet with automatic marshalling.
+func (cl *client) sendMarshalPacket(id byte, da interface{}) error {
+	return cl.sendPacket(id, msgpack.Marshal, da)
 }
 
 // Handle packet.
@@ -63,23 +80,36 @@ func (cl *client) handlePacket(da []byte) error {
 	}
 
 	if pk.timestamp != cl.timestamp {
-		return tracerr.New("time mismatch")
+		cl.closeNormal("time mismatch")
+		return nil
 	}
 
 	if pk.subId != cl.subId {
-		return tracerr.New("subscription mismatch")
+		cl.closeNormal("subscription mismatch")
+		return nil
+	}
+
+	if pk.rawPacket.id == PacketIdHeartbeat && cl.heartbeatStageHandler != nil {
+		return tracerr.Wrap(cl.heartbeatStageHandler.handlePacket(cl, pk))
+	}
+
+	if pk.rawPacket.id == PacketIdReport && cl.reportStageHandler != nil {
+		return tracerr.Wrap(cl.reportStageHandler.handlePacket(cl, pk))
 	}
 
 	if pk.rawPacket.id != cl.normalStageHandler.handlePacketId() {
-		return tracerr.New("normal packet mismatch")
+		cl.closeNormal("normal packet mismatch")
+		return nil
 	}
 
 	if cl.currentStage != cl.normalStageHandler.handleClientStage() {
-		return tracerr.New("normal stage mismatch")
+		cl.closeNormal("normal stage mismatch")
+		return nil
 	}
 
 	if cl.normalStageHandler == nil {
-		return tracerr.New("normal handler missing")
+		cl.closeNormal("normal stage handler missing")
+		return nil
 	}
 
 	return tracerr.Wrap(cl.normalStageHandler.handlePacket(cl, pk))
@@ -94,15 +124,18 @@ func (cl *client) handleRawPacket(da []byte) error {
 	}
 
 	if rpk.id != cl.rawStageHandler.handleRawPacketId() {
-		return tracerr.New("raw packet mismatch")
+		cl.closeNormal("raw packet mismatch")
+		return nil
 	}
 
 	if cl.currentStage != cl.rawStageHandler.handleClientStage() {
-		return tracerr.New("raw stage mismatch")
+		cl.closeNormal("raw stage handler mismatch")
+		return nil
 	}
 
 	if cl.rawStageHandler == nil {
-		return tracerr.New("raw handler missing")
+		cl.closeNormal("raw stage handler missing")
+		return nil
 	}
 
 	return tracerr.Wrap(cl.rawStageHandler.handlePacket(cl, rpk))

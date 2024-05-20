@@ -15,11 +15,13 @@ type bootMessage struct {
 type bootResponse struct {
 	version  byte
 	scriptId string
+	keyId    string
 }
 
 // Boot stage handler
 type bootStageHandler struct {
 	scriptId string
+	keyId    string
 }
 
 // Handle boot response
@@ -30,13 +32,32 @@ func (sh bootStageHandler) handlePacket(cl *client, rpk rawPacket) error {
 		return tracerr.Wrap(err)
 	}
 
-	if br.version != ClientVersion {
-		return tracerr.New("version mismatch")
+	if br.version != VersionSWS100 {
+		cl.closeNormal("version mismatch")
+		return nil
 	}
 
+	rc, err := cl.app.Dao().FindRecordById("keys", br.keyId)
+	if err != nil {
+		cl.closeNormal("key not found")
+		return nil
+	}
+
+	if rc.Get("blacklisted") != nil {
+		cl.closeNormal("key is blacklisted")
+		return nil
+	}
+
+	cl.sendRawPacket(sh.handleRawPacketId(), bootMessage{
+		subId:         cl.subId,
+		baseTimestamp: uint64(cl.timestamp),
+	})
+
 	sh.scriptId = br.scriptId
+	sh.keyId = br.keyId
+
 	cl.currentStage = ClientStageNormalHandshake
-	cl.normalStageHandler = handshakeHandler{bsh: sh}
+	cl.normalStageHandler = handshakeHandler{hmacKey: [32]byte{}, aesKey: [32]byte{}, bsh: sh}
 
 	return nil
 }

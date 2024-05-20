@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
+	"github.com/pocketbase/pocketbase"
 	"github.com/vmihailenco/msgpack"
 	"github.com/ztrue/tracerr"
 	"golang.org/x/sync/errgroup"
@@ -36,6 +36,9 @@ type loaderServer struct {
 	// List of clients.
 	clientMutex sync.Mutex
 	clients     map[*client]struct{}
+
+	// The pocketbase app.
+	app *pocketbase.PocketBase
 }
 
 // This function will marshal data, append a type onto the message, and send it to a specified WebSocket connection.
@@ -99,6 +102,8 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 		if err != nil {
 			return tracerr.Wrap(err)
 		}
+
+		cl.sequenceNumber += 1
 	}
 }
 
@@ -124,6 +129,8 @@ func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.
 		if err != nil {
 			return tracerr.Wrap(err)
 		}
+
+		cl.sequenceNumber += 1
 	}
 }
 
@@ -137,7 +144,7 @@ func (ls *loaderServer) timePump(ctx context.Context, cl *client, c *websocket.C
 
 		select {
 		case <-cl.heartbeatTicker.C:
-			log.Print("heartbeat")
+			ls.logger.Info("heartbeat", "subId", cl.subId)
 		case <-cl.timestampTicker.C:
 			cl.timestamp += 1
 		case <-ctx.Done():
@@ -154,21 +161,41 @@ func (ls *loaderServer) timePump(ctx context.Context, cl *client, c *websocket.C
 func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	var mu sync.Mutex
 	var c *websocket.Conn
+	var cl *client
 	var closed bool
 
-	cl := &client{
+	cl = &client{
+		app: ls.app,
+
 		timestampTicker: time.NewTicker(1 * time.Second),
 		heartbeatTicker: time.NewTicker(10 * time.Second),
 
 		subId:     uuid.New(),
 		timestamp: time.Now().Unix(),
 
-		normalStageHandler: nil,
-		rawStageHandler:    bootStageHandler{},
-		currentStage:       ClientStageRawBoot,
+		reportStageHandler:    nil,
+		heartbeatStageHandler: nil,
+		normalStageHandler:    nil,
+		rawStageHandler:       bootStageHandler{scriptId: "", keyId: ""},
+		currentStage:          ClientStageRawBoot,
 
 		rawPackets: make(chan rawPacket, ls.messageBufferLimit),
 		packets:    make(chan packet, ls.messageBufferLimit),
+
+		getRemoteAddr: func() string {
+			return r.RemoteAddr
+		},
+
+		closeNormal: func(rs string) {
+			mu.Lock()
+			defer mu.Unlock()
+			closed = true
+			if c != nil {
+				ls.logger.Warn("closing connection", "subId", cl.subId, "timestamp", cl.timestamp, "reason", rs)
+				c.Close(websocket.StatusNormalClosure, rs)
+			}
+		},
+
 		closeSlow: func() {
 			mu.Lock()
 			defer mu.Unlock()

@@ -10,6 +10,7 @@ require (
 
 require (
 	github.com/golang/protobuf v1.5.4 // indirect
+	github.com/zenazn/pkcs7pad v0.0.0-20170308005700-253a5b1f0e03 // indirect
 	github.com/ztrue/tracerr v0.4.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 )
