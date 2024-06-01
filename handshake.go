@@ -6,8 +6,9 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 
-	"github.com/vmihailenco/msgpack/v5"
+	"github.com/shamaton/msgpack/v2"
 	"github.com/zenazn/pkcs7pad"
 	"github.com/ztrue/tracerr"
 	"golang.org/x/crypto/curve25519"
@@ -15,13 +16,13 @@ import (
 )
 
 // The handshake message is information sent from the client to initiate the handshake
-type handshakeMessage struct {
-	clientPublicKey [32]byte
+type HandshakeMessage struct {
+	ClientPublicKey [32]byte
 }
 
 // The handshake response is information sent from the server to finish the handshake
-type handshakeResponse struct {
-	serverPublicKey [32]byte
+type HandshakeResponse struct {
+	ServerPublicKey [32]byte
 }
 
 // Handshake handler
@@ -70,8 +71,17 @@ func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface
 	da := data[:32]
 	em := data[len(data)-32:]
 
+	seq := make([]byte, 8)
+	ts := make([]byte, 8)
+
+	binary.LittleEndian.PutUint64(seq, cl.sequenceNumber)
+	binary.LittleEndian.PutUint64(ts, uint64(cl.timestamp))
+
 	mac := hmac.New(sha256.New, sh.hmacKey[:])
-	mac.Write(append(da, VersionSWS100, byte(cl.sequenceNumber)))
+	mac.Write(append(da, VersionSWS100))
+	mac.Write(seq)
+	mac.Write(ts)
+	mac.Write(cl.subId[:])
 
 	if !hmac.Equal(mac.Sum(nil), em) {
 		return tracerr.New("message tampered")
@@ -104,28 +114,44 @@ func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface
 	return tracerr.Wrap(msgpack.Unmarshal(da, &v))
 }
 
-// Handle handshake message
-func (sh handshakeHandler) handlePacket(cl *client, pk packet) error {
-	var hm handshakeMessage
-	err := msgpack.Unmarshal(pk.rawPacket.msg, &hm)
+// Send message through handshake handler.
+func (sh handshakeHandler) sendMessage(cl *client, msg Message) error {
+	ser, err := sh.marshalMessage(cl, msg.Data)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
 
-	rc, err := cl.app.Dao().FindRecordById("scripts", sh.bsh.scriptId)
+	cl.packets <- Packet{Id: msg.Id, Msg: ser}
+
+	return nil
+}
+
+// Handle handshake message
+func (sh handshakeHandler) handlePacket(cl *client, pk Packet) error {
+	var hm HandshakeMessage
+	err := msgpack.Unmarshal(pk.Msg, &hm)
 	if err != nil {
-		cl.closeNormal("script not found")
-		return nil
+		return tracerr.Wrap(err)
+	}
+
+	kr, err := findKeyById(cl, sh.bsh.keyId)
+	if err != nil {
+		return err
+	}
+
+	sr := kr.ExpandedOne("script")
+	if sr == nil {
+		return tracerr.New("script expand fail")
 	}
 
 	bp := make([]byte, 32)
-	err = rc.UnmarshalJSONField("point", bp)
+	err = sr.UnmarshalJSONField("point", bp)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
 
 	st := make([]byte, 32)
-	err = rc.UnmarshalJSONField("salt", st)
+	err = sr.UnmarshalJSONField("salt", st)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
@@ -141,7 +167,7 @@ func (sh handshakeHandler) handlePacket(cl *client, pk packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	shk, err := curve25519.X25519(pvk, hm.clientPublicKey[:])
+	shk, err := curve25519.X25519(pvk, hm.ClientPublicKey[:])
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
@@ -158,14 +184,13 @@ func (sh handshakeHandler) handlePacket(cl *client, pk packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	cl.sendMarshalPacket(sh.handlePacketId(), handshakeResponse{
-		serverPublicKey: [32]byte(pbk),
-	})
-
 	cl.currentStage = ClientStageIdentify
-	cl.normalStageHandler = identifyHandler{hsh: sh}
+	cl.stageHandler = identifyHandler{hsh: sh}
 	cl.heartbeatStageHandler = &heartbeatHandler{hsh: sh}
 	cl.reportStageHandler = &reportHandler{hsh: sh}
+	cl.msgs <- Message{Id: sh.handlePacketId(), Data: HandshakeResponse{
+		ServerPublicKey: [32]byte(pbk),
+	}}
 
 	return nil
 }
@@ -177,5 +202,5 @@ func (sh handshakeHandler) handlePacketId() byte {
 
 // Client stage that the handler is for
 func (sh handshakeHandler) handleClientStage() byte {
-	return ClientStageNormalHandshake
+	return ClientStageHandshake
 }

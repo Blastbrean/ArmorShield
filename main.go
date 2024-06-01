@@ -14,6 +14,7 @@ func main() {
 		app:                app,
 		logger:             app.Logger().WithGroup("ls"),
 		messageBufferLimit: 16,
+		packetBufferLimit:  16,
 		readLimitBytes:     16380,
 		clients:            make(map[*client]struct{}),
 	}

@@ -1,19 +1,7 @@
 package main
 
-import (
-	"github.com/vmihailenco/msgpack/v5"
-	"github.com/ztrue/tracerr"
-)
-
 // The heartbeat message is to signal to the client we want a beat back
-type heartbeatMessage struct {
-	timestamp uint64
-}
-
-// The heartbeat response is to signal to the server our beat
-type heartbeatResponse struct {
-	timestamp uint64
-}
+type HeartbeatMessage struct{}
 
 // Heartbeat handler
 type heartbeatHandler struct {
@@ -21,12 +9,9 @@ type heartbeatHandler struct {
 }
 
 // Handle heartbeat
-func (sh heartbeatHandler) handlePacket(cl *client, pk packet) error {
-	var br heartbeatMessage
-	err := msgpack.Unmarshal(pk.rawPacket.msg, &br)
-	if err != nil {
-		return tracerr.Wrap(err)
-	}
+func (sh heartbeatHandler) handlePacket(cl *client, pk Packet) error {
+	cl.forcedHeartbeat[cl.currentStage] = true
+	cl.logger.Warn("client sent heartbeat")
 
 	return nil
 }

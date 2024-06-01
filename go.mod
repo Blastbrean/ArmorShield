@@ -9,7 +9,10 @@ require (
 )
 
 require (
+	github.com/go-playground/locales v0.14.1 // indirect
+	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
+	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/zenazn/pkcs7pad v0.0.0-20170308005700-253a5b1f0e03 // indirect
 	github.com/ztrue/tracerr v0.4.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
@@ -60,13 +63,12 @@ require (
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/pocketbase/dbx v1.10.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/shamaton/msgpack/v2 v2.2.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
-	github.com/vmihailenco/msgpack v4.0.4+incompatible
-	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	gocloud.dev v0.37.0 // indirect

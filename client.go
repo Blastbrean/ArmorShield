@@ -1,10 +1,12 @@
 package main
 
 import (
+	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pocketbase/pocketbase"
-	"github.com/vmihailenco/msgpack"
+	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
 )
 
@@ -13,130 +15,78 @@ const (
 	VersionSWS100 = iota + 0x64
 )
 
+// Client stage
+const (
+	ClientStageBoot = iota
+	ClientStageHandshake
+	ClientStageIdentify
+)
+
+// Message communication type
+type Message struct {
+	Id   byte
+	Data interface{}
+}
+
 // A client represents a connection to the loader.
 // Packets and messages are queued in a channel to the client from the server.
 // If they're too slow to keep up with the packets or messages, they'll be removed.
 type client struct {
-	app *pocketbase.PocketBase
+	app    *pocketbase.PocketBase
+	logger *slog.Logger
 
 	timestampTicker *time.Ticker
 	heartbeatTicker *time.Ticker
 
 	timestamp int64
-	subId     [16]byte
+	subId     uuid.UUID
 
 	heartbeatStageHandler *heartbeatHandler
 	reportStageHandler    *reportHandler
-	rawStageHandler       rawStageHandler
-	normalStageHandler    normalStageHandler
-	currentStage          byte
+	stageHandler          stageHandler
 
-	rawPackets     chan rawPacket
-	packets        chan packet
+	forcedHeartbeat map[byte]bool
+	currentStage    byte
+
+	packets        chan Packet
+	msgs           chan Message
 	sequenceNumber uint64
 
 	getRemoteAddr func() string
-
-	closeNormal func(rn string)
-	closeSlow   func()
+	closeSlow     func()
 }
 
-// Send raw packet.
-func (cl *client) sendRawPacket(id byte, da interface{}) error {
-	msg, err := msgpack.Marshal(da)
+// Handle Packet.
+func (cl *client) handlePacket(msg []byte) error {
+	var pk Packet
+	err := msgpack.Unmarshal(msg, pk)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
 
-	cl.rawPackets <- rawPacket{id: id, msg: msg}
-
-	return nil
-}
-
-// Send packet with user provided marshal function.
-func (cl *client) sendPacket(id byte, marshaler func(interface{}) ([]byte, error), da interface{}) error {
-	msg, err := marshaler(da)
-	if err != nil {
-		return tracerr.Wrap(err)
-	}
-
-	rpk := rawPacket{id: id, msg: msg}
-	cl.packets <- packet{timestamp: cl.timestamp, subId: cl.subId, rawPacket: rpk}
-
-	return nil
-}
-
-// Send packet with automatic marshalling.
-func (cl *client) sendMarshalPacket(id byte, da interface{}) error {
-	return cl.sendPacket(id, msgpack.Marshal, da)
-}
-
-// Handle packet.
-func (cl *client) handlePacket(da []byte) error {
-	var pk packet
-	err := msgpack.Unmarshal(da, pk)
-	if err != nil {
-		return tracerr.Wrap(err)
-	}
-
-	if pk.timestamp != cl.timestamp {
-		cl.closeNormal("time mismatch")
-		return nil
-	}
-
-	if pk.subId != cl.subId {
-		cl.closeNormal("subscription mismatch")
-		return nil
-	}
-
-	if pk.rawPacket.id == PacketIdHeartbeat && cl.heartbeatStageHandler != nil {
+	if pk.Id == PacketIdHeartbeat && cl.heartbeatStageHandler != nil {
 		return tracerr.Wrap(cl.heartbeatStageHandler.handlePacket(cl, pk))
 	}
 
-	if pk.rawPacket.id == PacketIdReport && cl.reportStageHandler != nil {
+	if pk.Id == PacketIdReport && cl.reportStageHandler != nil {
 		return tracerr.Wrap(cl.reportStageHandler.handlePacket(cl, pk))
 	}
 
-	if pk.rawPacket.id != cl.normalStageHandler.handlePacketId() {
-		cl.closeNormal("normal packet mismatch")
-		return nil
+	if cl.currentStage >= ClientStageIdentify && !cl.forcedHeartbeat[cl.currentStage] {
+		return tracerr.New("heartbeat missing")
 	}
 
-	if cl.currentStage != cl.normalStageHandler.handleClientStage() {
-		cl.closeNormal("normal stage mismatch")
-		return nil
+	if pk.Id != cl.stageHandler.handlePacketId() {
+		return tracerr.New("normal packet mismatch")
 	}
 
-	if cl.normalStageHandler == nil {
-		cl.closeNormal("normal stage handler missing")
-		return nil
+	if cl.currentStage != cl.stageHandler.handleClientStage() {
+		return tracerr.New("normal stage mismatch")
 	}
 
-	return tracerr.Wrap(cl.normalStageHandler.handlePacket(cl, pk))
-}
-
-// Handle raw packet.
-func (cl *client) handleRawPacket(da []byte) error {
-	var rpk rawPacket
-	err := msgpack.Unmarshal(da, rpk)
-	if err != nil {
-		return tracerr.Wrap(err)
+	if cl.stageHandler == nil {
+		return tracerr.New("normal stage handler missing")
 	}
 
-	if rpk.id != cl.rawStageHandler.handleRawPacketId() {
-		cl.closeNormal("raw packet mismatch")
-		return nil
-	}
-
-	if cl.currentStage != cl.rawStageHandler.handleClientStage() {
-		cl.closeNormal("raw stage handler mismatch")
-		return nil
-	}
-
-	if cl.rawStageHandler == nil {
-		cl.closeNormal("raw stage handler missing")
-		return nil
-	}
-
-	return tracerr.Wrap(cl.rawStageHandler.handlePacket(cl, rpk))
+	return tracerr.Wrap(cl.stageHandler.handlePacket(cl, pk))
 }

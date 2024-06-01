@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -13,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase"
-	"github.com/vmihailenco/msgpack"
+	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
 	"golang.org/x/sync/errgroup"
 	"nhooyr.io/websocket"
@@ -21,10 +20,10 @@ import (
 
 // The loader server represents the server that clients will connect to.
 type loaderServer struct {
-	// The "messageBufferLimit" controls the max number of messages that can be queued for one client.
+	// The "messageBufferLimit" and "packetBufferLimit" controls the max number of messages / packets that can be queued for one client.
 	// Once they exceed this limit, they are kicked from the server.
-	// Defaults to 16.
 	messageBufferLimit int
+	packetBufferLimit  int
 
 	// The "readLimitBytes" controls the max number bytes that will be read for one client.
 	// Defaults to 4096.
@@ -41,14 +40,24 @@ type loaderServer struct {
 	app *pocketbase.PocketBase
 }
 
-// This function will marshal data, append a type onto the message, and send it to a specified WebSocket connection.
-func marshalWrite(ctx context.Context, c *websocket.Conn, da interface{}, dt byte) error {
-	msg, err := msgpack.Marshal(da)
+// This function will write a Packet to the websocket connection.
+func writePacket(ctx context.Context, c *websocket.Conn, pk Packet) error {
+	ser, err := msgpack.Marshal(pk)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
 
-	return c.Write(ctx, websocket.MessageBinary, append(msg, dt))
+	return c.Write(ctx, websocket.MessageBinary, ser)
+}
+
+// This function will serialize a message and write the packet to the websocket connection.
+func writeMessage(ctx context.Context, c *websocket.Conn, msg Message) error {
+	ser, err := msgpack.Marshal(msg.Data)
+	if err != nil {
+		return tracerr.Wrap(err)
+	}
+
+	return writePacket(ctx, c, Packet{Id: msg.Id, Msg: ser})
 }
 
 // This function accepts the WebSocket connection and then adds it to the list of all clients.
@@ -57,7 +66,7 @@ func (ls *loaderServer) subscribeHandler(ctx echo.Context) {
 	req := ctx.Request()
 	err := ls.subscribe(req.Context(), ctx.Response().Writer, req)
 
-	if !errors.Is(err, context.Canceled) {
+	if errors.Is(err, context.Canceled) {
 		return
 	}
 
@@ -83,22 +92,13 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 			return tracerr.Wrap(err)
 		}
 
-		arr := make([]byte, ls.readLimitBytes)
-		_, err = rr.Read(arr)
-		if err != nil && !errors.Is(err, io.EOF) {
+		msg := make([]byte, ls.readLimitBytes)
+		_, err = rr.Read(msg)
+		if err != nil {
 			return tracerr.Wrap(err)
 		}
 
-		dt := arr[len(arr)-1]
-		da := arr[:len(arr)-1]
-
-		switch dt {
-		case PacketTypeNormal:
-			err = cl.handlePacket(da)
-		case PacketTypeRaw:
-			err = cl.handleRawPacket(da)
-		}
-
+		err = cl.handlePacket(msg)
 		if err != nil {
 			return tracerr.Wrap(err)
 		}
@@ -119,9 +119,9 @@ func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.
 
 		select {
 		case pk := <-cl.packets:
-			err = marshalWrite(ctx, c, pk, PacketTypeNormal)
-		case rpk := <-cl.rawPackets:
-			err = marshalWrite(ctx, c, rpk, PacketTypeRaw)
+			err = writePacket(ctx, c, pk)
+		case msg := <-cl.msgs:
+			err = writeMessage(ctx, c, msg)
 		case <-ctx.Done():
 			return tracerr.Wrap(ctx.Err())
 		}
@@ -144,7 +144,7 @@ func (ls *loaderServer) timePump(ctx context.Context, cl *client, c *websocket.C
 
 		select {
 		case <-cl.heartbeatTicker.C:
-			ls.logger.Info("heartbeat", "subId", cl.subId)
+			cl.logger.Info("heartbeat tick")
 		case <-cl.timestampTicker.C:
 			cl.timestamp += 1
 		case <-ctx.Done():
@@ -164,36 +164,28 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 	var cl *client
 	var closed bool
 
+	subId := uuid.New()
+
 	cl = &client{
-		app: ls.app,
+		app:    ls.app,
+		logger: ls.app.Logger().WithGroup(subId.String()),
 
 		timestampTicker: time.NewTicker(1 * time.Second),
 		heartbeatTicker: time.NewTicker(10 * time.Second),
 
-		subId:     uuid.New(),
+		subId:     subId,
 		timestamp: time.Now().Unix(),
 
 		reportStageHandler:    nil,
 		heartbeatStageHandler: nil,
-		normalStageHandler:    nil,
-		rawStageHandler:       bootStageHandler{scriptId: "", keyId: ""},
-		currentStage:          ClientStageRawBoot,
+		stageHandler:          bootStageHandler{keyId: ""},
+		currentStage:          ClientStageBoot,
 
-		rawPackets: make(chan rawPacket, ls.messageBufferLimit),
-		packets:    make(chan packet, ls.messageBufferLimit),
+		packets: make(chan Packet, ls.packetBufferLimit),
+		msgs:    make(chan Message, ls.messageBufferLimit),
 
 		getRemoteAddr: func() string {
 			return r.RemoteAddr
-		},
-
-		closeNormal: func(rs string) {
-			mu.Lock()
-			defer mu.Unlock()
-			closed = true
-			if c != nil {
-				ls.logger.Warn("closing connection", "subId", cl.subId, "timestamp", cl.timestamp, "reason", rs)
-				c.Close(websocket.StatusNormalClosure, rs)
-			}
 		},
 
 		closeSlow: func() {
@@ -231,27 +223,12 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 	errs.Go(func() error { return tracerr.Wrap(ls.readPump(ctx, cl, c)) })
 	errs.Go(func() error { return tracerr.Wrap(ls.writePump(ctx, cl, c)) })
 
-	cl.sendRawPacket(RawPacketIdBoot, bootMessage{
-		subId:         cl.subId,
-		baseTimestamp: uint64(cl.timestamp),
-	})
+	cl.msgs <- Message{Id: PacketIdBootstrap, Data: BootMessage{
+		BaseTimestamp: uint64(cl.timestamp),
+		SubId:         cl.subId,
+	}}
 
 	return errs.Wait()
-}
-
-// This function publishes a normal packet to all clients.
-// It never blocks and so packets to slow subscribers are dropped.
-func (ls *loaderServer) publish(pk packet) {
-	ls.clientMutex.Lock()
-	defer ls.clientMutex.Unlock()
-
-	for cl := range ls.clients {
-		select {
-		case cl.packets <- pk:
-		default:
-			go cl.closeSlow()
-		}
-	}
 }
 
 // This function adds a new client to the map.
