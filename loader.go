@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -64,7 +65,11 @@ func writeMessage(ctx context.Context, c *websocket.Conn, msg Message) error {
 // Instead of returning an error, this function will redirect errors to the logger implementation instead.
 func (ls *loaderServer) subscribeHandler(ctx echo.Context) {
 	req := ctx.Request()
-	err := ls.subscribe(req.Context(), ctx.Response().Writer, req)
+	cl, err := ls.subscribe(req.Context(), ctx.Response().Writer, req)
+
+	if err == nil {
+		return
+	}
 
 	if errors.Is(err, context.Canceled) {
 		return
@@ -75,7 +80,7 @@ func (ls *loaderServer) subscribeHandler(ctx echo.Context) {
 		return
 	}
 
-	ls.logger.Error(err.Error(), "stacktrace", tracerr.StackTrace(err))
+	cl.logger.Error(err.Error(), slog.Any("stacktrace", tracerr.StackTrace(err)))
 }
 
 // This listens for new packets sent by the client and handles them.
@@ -92,13 +97,15 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 			return tracerr.Wrap(err)
 		}
 
-		msg := make([]byte, ls.readLimitBytes)
-		_, err = rr.Read(msg)
+		b := Get()
+		defer Put(b)
+
+		_, err = b.ReadFrom(io.LimitReader(rr, int64(ls.readLimitBytes)))
 		if err != nil {
-			return tracerr.Wrap(err)
+			return err
 		}
 
-		err = cl.handlePacket(msg)
+		err = cl.handlePacket(b.Bytes())
 		if err != nil {
 			return tracerr.Wrap(err)
 		}
@@ -108,11 +115,12 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 }
 
 // This listens for new messages written to the buffer and writes them to the WebSocket.
+// If we don't write something within 30 seconds, we'll drop the client.
 func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.Conn) error {
 	defer c.CloseNow()
 
 	for {
-		ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+		ctx, cancel := context.WithTimeout(ctx, time.Second*30)
 		defer cancel()
 
 		err := error(nil)
@@ -135,6 +143,7 @@ func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.
 }
 
 // This contionously perform actions based on tickers.
+// If nothing happens within 30 seconds, we'll drop the client.
 func (ls *loaderServer) timePump(ctx context.Context, cl *client, c *websocket.Conn) error {
 	defer c.CloseNow()
 
@@ -146,6 +155,7 @@ func (ls *loaderServer) timePump(ctx context.Context, cl *client, c *websocket.C
 		case <-cl.heartbeatTicker.C:
 			cl.logger.Info("heartbeat tick")
 		case <-cl.timestampTicker.C:
+			cl.logger.Info("timestamp tick")
 			cl.timestamp += 1
 		case <-ctx.Done():
 			return tracerr.Wrap(ctx.Err())
@@ -158,7 +168,7 @@ func (ls *loaderServer) timePump(ctx context.Context, cl *client, c *websocket.C
 // After that, it's registered into the list as a real client and creates a reader and writer pump.
 // Once those reader and writer pumps are created, we wait for them to error or end.
 // If the context is cancelled or an error occurs, it returns and deletes the client.
-func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r *http.Request) (*client, error) {
 	var mu sync.Mutex
 	var c *websocket.Conn
 	var cl *client
@@ -203,14 +213,14 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 
 	c2, err := websocket.Accept(w, r, nil)
 	if err != nil {
-		return tracerr.Wrap(err)
+		return cl, tracerr.Wrap(err)
 	}
 
 	mu.Lock()
 
 	if closed {
 		mu.Unlock()
-		return tracerr.Wrap(net.ErrClosed)
+		return cl, tracerr.Wrap(net.ErrClosed)
 	}
 
 	c = c2
@@ -228,7 +238,7 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 		SubId:         cl.subId,
 	}}
 
-	return errs.Wait()
+	return cl, errs.Wait()
 }
 
 // This function adds a new client to the map.

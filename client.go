@@ -59,7 +59,7 @@ type client struct {
 // Handle Packet.
 func (cl *client) handlePacket(msg []byte) error {
 	var pk Packet
-	err := msgpack.Unmarshal(msg, pk)
+	err := msgpack.Unmarshal(msg, &pk)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}

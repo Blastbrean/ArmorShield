@@ -136,7 +136,7 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	if hm.vi.luaVersion != "LuaU" {
+	if hm.vi.luaVersion != "Lua 5.1" {
 		return tracerr.New("lua mismatch")
 	}
 
