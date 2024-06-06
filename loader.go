@@ -87,12 +87,18 @@ func (ls *loaderServer) subscribeHandler(ctx echo.Context) {
 // If we don't recieve a new message within 10 seconds, we'll drop the client.
 func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.Conn) error {
 	defer c.CloseNow()
+	defer close(cl.readerClosed)
 
 	for {
 		ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 		defer cancel()
 
 		_, rr, err := c.Reader(ctx)
+
+		if errors.Is(err, net.ErrClosed) {
+			return nil
+		}
+
 		if err != nil {
 			return tracerr.Wrap(err)
 		}
@@ -117,8 +123,6 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 // This listens for new messages written to the buffer and writes them to the WebSocket.
 // If we don't write something within 30 seconds, we'll drop the client.
 func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.Conn) error {
-	defer c.CloseNow()
-
 	for {
 		ctx, cancel := context.WithTimeout(ctx, time.Second*30)
 		defer cancel()
@@ -132,6 +136,8 @@ func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.
 			err = writeMessage(ctx, c, msg)
 		case <-ctx.Done():
 			return tracerr.Wrap(ctx.Err())
+		case <-cl.readerClosed:
+			return nil
 		}
 
 		if err != nil {
@@ -144,9 +150,7 @@ func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.
 
 // This contionously perform actions based on tickers.
 // If nothing happens within 30 seconds, we'll drop the client.
-func (ls *loaderServer) timePump(ctx context.Context, cl *client, c *websocket.Conn) error {
-	defer c.CloseNow()
-
+func (ls *loaderServer) timePump(ctx context.Context, cl *client, _ *websocket.Conn) error {
 	for {
 		ctx, cancel := context.WithTimeout(ctx, time.Second*30)
 		defer cancel()
@@ -159,6 +163,8 @@ func (ls *loaderServer) timePump(ctx context.Context, cl *client, c *websocket.C
 			cl.timestamp += 1
 		case <-ctx.Done():
 			return tracerr.Wrap(ctx.Err())
+		case <-cl.readerClosed:
+			return nil
 		}
 	}
 }
@@ -191,20 +197,27 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 		stageHandler:          bootStageHandler{keyId: ""},
 		currentStage:          ClientStageBoot,
 
-		packets: make(chan Packet, ls.packetBufferLimit),
-		msgs:    make(chan Message, ls.messageBufferLimit),
+		packets:      make(chan Packet, ls.packetBufferLimit),
+		msgs:         make(chan Message, ls.messageBufferLimit),
+		readerClosed: make(chan struct{}),
 
 		getRemoteAddr: func() string {
 			return r.RemoteAddr
 		},
 
-		closeSlow: func() {
+		drop: func(reason string, args ...any) error {
 			mu.Lock()
 			defer mu.Unlock()
 			closed = true
+
+			attrs := append([]any{slog.String("reason", reason)}, args...)
+			cl.logger.Warn("dropping connection", attrs...)
+
 			if c != nil {
-				c.Close(websocket.StatusPolicyViolation, "the connection is too slow to keep up with the broadcast messsages")
+				return tracerr.Wrap(c.Close(websocket.StatusNormalClosure, reason))
 			}
+
+			return tracerr.New("no connection to drop")
 		},
 	}
 
@@ -235,7 +248,7 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 
 	cl.msgs <- Message{Id: PacketIdBootstrap, Data: BootMessage{
 		BaseTimestamp: uint64(cl.timestamp),
-		SubId:         cl.subId,
+		SubId:         cl.subId.String(),
 	}}
 
 	return cl, errs.Wait()

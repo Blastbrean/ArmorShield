@@ -3,7 +3,9 @@ package main
 
 import (
 	"encoding/hex"
+	"log/slog"
 
+	"github.com/pocketbase/pocketbase/models"
 	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
 	"golang.org/x/crypto/sha3"
@@ -115,6 +117,78 @@ type identifyHandler struct {
 	hsh handshakeHandler
 }
 
+// Expect identifiers
+func expectIdentifiers(cl *client, im *identifyMessage, kr *models.Record) (*models.Record, *models.Record, *models.Record, *models.Record, error) {
+	ai := im.ki.ai
+	aid, err := ai.hash()
+	if err != nil {
+		return nil, nil, nil, nil, tracerr.Wrap(err)
+	}
+
+	sbr, err := createNewRecord(cl, "subscriptions", map[string]any{
+		"sid": cl.subId.String(),
+		"key": kr.Id,
+	})
+
+	if err != nil {
+		return nil, nil, nil, nil, tracerr.Wrap(err)
+	}
+
+	ar, err := expectKeyedRecord(cl, kr, "analytics", map[string]any{
+		"aid":    aid,
+		"dst":    ai.daylightSavingsTime,
+		"region": ai.region,
+		"locale": ai.systemLocaleId,
+		"key":    kr.Id,
+	})
+
+	if err != nil {
+		return nil, nil, nil, nil, tracerr.Wrap(err)
+	}
+
+	fi := im.ki.fi
+	fr, err := expectKeyedRecord(cl, kr, "fingerprint", map[string]any{
+		"deviceType":  fi.deviceType,
+		"deviceId":    fi.deviceId,
+		"exploitHwid": fi.exploitHwid,
+		"exploitName": fi.exploitName,
+		"ipAddress":   cl.getRemoteAddr(),
+		"key":         kr.Id,
+	})
+
+	if err != nil {
+		return nil, nil, nil, nil, tracerr.Wrap(err)
+	}
+
+	si := im.si.si
+	sr, err := createNewRecord(cl, "sessions", map[string]any{
+		"cpuStart":        si.cpuStart,
+		"playSessionId":   si.playSessionId,
+		"robloxSessionId": si.robloxSessionId,
+		"workspaceScan":   si.workspaceScan,
+		"subscription":    sbr.Id,
+	})
+
+	if err != nil {
+		return nil, nil, nil, nil, tracerr.Wrap(err)
+	}
+
+	ji := im.si.ji
+	jr, err := createNewRecord(cl, "joins", map[string]any{
+		"userId":       ji.userId,
+		"placeId":      ji.placeId,
+		"jobId":        ji.jobId,
+		"elapsedTime":  ji.elapsedTime,
+		"subscription": sbr.Id,
+	})
+
+	if err != nil {
+		return nil, nil, nil, nil, tracerr.Wrap(err)
+	}
+
+	return ar, fr, sr, jr, nil
+}
+
 // Hash analytics information
 func (ai *analyticsInfo) hash() (string, error) {
 	aib, err := msgpack.Marshal(ai)
@@ -130,102 +204,36 @@ func (ai *analyticsInfo) hash() (string, error) {
 
 // Handle identification message
 func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
-	var hm identifyMessage
-	err := sh.hsh.unmarshalMessage(cl, pk.Msg, &hm)
+	var im identifyMessage
+	err := sh.hsh.unmarshalMessage(cl, pk.Msg, &im)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
 
-	if hm.vi.luaVersion != "Lua 5.1" {
-		return tracerr.New("lua mismatch")
+	if im.vi.luaVersion != "Lua 5.1" {
+		return cl.drop("bad environment", slog.String("version", im.vi.luaVersion))
 	}
 
-	kr, err := findKeyById(cl, sh.hsh.bsh.keyId)
+	kr, err := cl.app.Dao().FindRecordById("keys", sh.hsh.bsh.keyId)
 	if err != nil {
-		return tracerr.Wrap(err)
+		return cl.drop("failed to get key", slog.String("error", err.Error()))
 	}
 
-	ai := hm.ki.ai
-	aid, err := ai.hash()
+	ar, fr, sr, jr, err := expectIdentifiers(cl, &im, kr)
 	if err != nil {
-		return tracerr.Wrap(err)
+		return cl.drop("expected identifiers", slog.Any("records", []*models.Record{ar, fr, sr, jr}), slog.String("error", err.Error()))
 	}
 
-	ar, err := expectKeyedRecord(cl, kr, "analytics", map[string]any{
-		"aid":    aid,
-		"dst":    ai.daylightSavingsTime,
-		"region": ai.region,
-		"locale": ai.systemLocaleId,
-		"key":    kr.Id,
-	})
-
-	if err != nil {
-		return tracerr.Wrap(err)
+	if err := checkBlacklist(cl, &im.ki.fi, &im.si.si); err != nil {
+		return sh.hsh.bsh.blacklistKey(cl, "active blacklist", slog.String("error", err.Error()))
 	}
 
-	if err = ai.validate(ar); err != nil {
-		return tracerr.Wrap(err)
+	if err := checkMismatch(&im.ki.fi, fr, ar, &im.ki.ai); err != nil {
+		return cl.drop("information mismatch", slog.String("error", err.Error()))
 	}
 
-	fi := hm.ki.fi
-	fr, err := expectKeyedRecord(cl, kr, "fingerprint", map[string]any{
-		"deviceType":  fi.deviceType,
-		"deviceId":    fi.deviceId,
-		"exploitHwid": fi.exploitHwid,
-		"exploitName": fi.exploitName,
-		"ipAddress":   cl.getRemoteAddr(),
-		"key":         kr.Id,
-	})
-
-	if err != nil {
-		return tracerr.Wrap(err)
-	}
-
-	if err = fi.validate(cl, fr); err != nil {
-		return tracerr.Wrap(err)
-	}
-
-	sbr, err := createNewRecord(cl, "subscriptions", map[string]any{
-		"sid": cl.subId.String(),
-		"key": kr.Id,
-	})
-
-	if err != nil {
-		return tracerr.Wrap(err)
-	}
-
-	si := hm.si.si
-	_, err = createNewRecord(cl, "sessions", map[string]any{
-		"cpuStart":        si.cpuStart,
-		"playSessionId":   si.playSessionId,
-		"robloxSessionId": si.robloxSessionId,
-		"workspaceScan":   si.workspaceScan,
-		"subscription":    sbr.Id,
-	})
-
-	if err != nil {
-		return tracerr.Wrap(err)
-	}
-
-	if err = si.validate(cl); err != nil {
-		return tracerr.Wrap(err)
-	}
-
-	ji := hm.si.ji
-	_, err = createNewRecord(cl, "joins", map[string]any{
-		"userId":       ji.userId,
-		"placeId":      ji.placeId,
-		"jobId":        ji.jobId,
-		"elapsedTime":  ji.elapsedTime,
-		"subscription": sbr.Id,
-	})
-
-	if err != nil {
-		return tracerr.Wrap(err)
-	}
-
-	if err = ji.validate(); err != nil {
-		return tracerr.Wrap(err)
+	if err := checkAssosiation(&im.si.ji); err != nil && !jr.GetBool("cleared") {
+		return cl.drop("suspicious activity", slog.String("error", err.Error()))
 	}
 
 	err = sh.hsh.sendMessage(cl, Message{Id: sh.handlePacketId(), Data: identifyResponse{

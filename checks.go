@@ -6,7 +6,7 @@ import (
 	"github.com/ztrue/tracerr"
 )
 
-func (ji *joinInfo) validate() error {
+func checkAssosiation(ji *joinInfo) error {
 	if usm := NewUniverse(ji.userGroups).SliceMatches([]uint64{}); len(usm) > 0 {
 		return tracerr.New("group assosiation")
 	}
@@ -22,7 +22,7 @@ func (ji *joinInfo) validate() error {
 	return nil
 }
 
-func (si *sessionInfo) validate(cl *client) error {
+func checkBlacklist(cl *client, fi *fingerprintInfo, si *sessionInfo) error {
 	blsr, err := cl.app.Dao().FindFirstRecordByFilter(
 		"sessions",
 		"subscription.key.blacklist != null && (cpuStart = {:cpuStart} || playSessionId = {:playSessionId} || robloxSessionId = {:robloxSessionId})",
@@ -31,26 +31,6 @@ func (si *sessionInfo) validate(cl *client) error {
 
 	if blsr != nil && err == nil {
 		return tracerr.New("session blacklist")
-	}
-
-	return nil
-}
-
-func (fi *fingerprintInfo) validate(cl *client, fr *models.Record) error {
-	if fr.GetString("deviceId") != fi.deviceId {
-		return tracerr.New("did mismatch")
-	}
-
-	if fr.GetString("exploitHwid") != fi.exploitHwid {
-		return tracerr.New("hwid mismatch")
-	}
-
-	if fr.GetString("exploitName") != fi.exploitName {
-		return tracerr.New("exploit mismatch")
-	}
-
-	if fr.GetInt("deviceType") != int(fi.deviceType) {
-		return tracerr.New("dt mismatch")
 	}
 
 	blfr, err := cl.app.Dao().FindFirstRecordByFilter(
@@ -76,7 +56,23 @@ func (fi *fingerprintInfo) validate(cl *client, fr *models.Record) error {
 	return nil
 }
 
-func (ai *analyticsInfo) validate(ar *models.Record) error {
+func checkMismatch(fi *fingerprintInfo, fr *models.Record, ar *models.Record, ai *analyticsInfo) error {
+	if fr.GetString("deviceId") != fi.deviceId {
+		return tracerr.New("device id mismatch")
+	}
+
+	if fr.GetString("exploitHwid") != fi.exploitHwid {
+		return tracerr.New("hwid mismatch")
+	}
+
+	if fr.GetString("exploitName") != fi.exploitName {
+		return tracerr.New("exploit mismatch")
+	}
+
+	if fr.GetInt("deviceType") != int(fi.deviceType) {
+		return tracerr.New("device type mismatch")
+	}
+
 	aid, err := ai.hash()
 	if err != nil {
 		return tracerr.Wrap(err)

@@ -1,7 +1,9 @@
 package main
 
 import (
-	"github.com/pocketbase/pocketbase/models"
+	"log/slog"
+
+	"github.com/pocketbase/pocketbase/forms"
 	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
 )
@@ -9,7 +11,7 @@ import (
 // The boot message is information sent from the server to initiate the client
 type BootMessage struct {
 	BaseTimestamp uint64
-	SubId         [16]byte
+	SubId         string
 }
 
 // The boot response is information sent from the client to initiate the server
@@ -22,17 +24,26 @@ type bootStageHandler struct {
 	keyId string
 }
 
-// Find key
-func findKeyById(cl *client, keyId string) (*models.Record, error) {
-	kr, err := cl.app.Dao().FindRecordById("keys", keyId)
+// Blacklist key
+func (sh bootStageHandler) blacklistKey(cl *client, reason string, attrs ...any) error {
+	kr, err := cl.app.Dao().FindRecordById("keys", sh.keyId)
 	if err != nil {
-		return kr, tracerr.New("key not found")
+		return cl.drop("failed to get key", slog.String("error", err.Error()))
 	}
 
-	return kr, err
+	form := forms.NewRecordUpsert(cl.app, kr)
+	form.LoadData(map[string]any{
+		"blacklist": reason,
+	})
+
+	if err := form.Submit(); err != nil {
+		return err
+	}
+
+	return cl.drop(reason, attrs...)
 }
 
-// Handle boot responsew
+// Handle boot response
 func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	var br BootResponse
 	err := msgpack.Unmarshal(pk.Msg, &br)
@@ -40,13 +51,14 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	kr, err := findKeyById(cl, br.KeyId)
+	kr, err := cl.app.Dao().FindRecordById("keys", br.KeyId)
 	if err != nil {
-		return tracerr.New("key not found")
+		return cl.drop("failed to get key", slog.String("error", err.Error()))
 	}
 
-	if kr.Get("blacklisted") != nil {
-		return tracerr.New("key is blacklisted")
+	reason := kr.GetString("blacklist")
+	if len(reason) > 0 {
+		return cl.drop("key is blacklisted", slog.String("blacklist", reason))
 	}
 
 	cl.currentStage = ClientStageHandshake

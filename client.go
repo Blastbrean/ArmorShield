@@ -47,13 +47,14 @@ type client struct {
 
 	forcedHeartbeat map[byte]bool
 	currentStage    byte
+	sequenceNumber  uint64
 
-	packets        chan Packet
-	msgs           chan Message
-	sequenceNumber uint64
+	packets      chan Packet
+	msgs         chan Message
+	readerClosed chan struct{}
 
 	getRemoteAddr func() string
-	closeSlow     func()
+	drop          func(reason string, args ...any) error
 }
 
 // Handle Packet.
@@ -73,19 +74,19 @@ func (cl *client) handlePacket(msg []byte) error {
 	}
 
 	if cl.currentStage >= ClientStageIdentify && !cl.forcedHeartbeat[cl.currentStage] {
-		return tracerr.New("heartbeat missing")
+		return cl.drop("heartbeat fail", slog.Int("stage", int(cl.currentStage)))
 	}
 
 	if pk.Id != cl.stageHandler.handlePacketId() {
-		return tracerr.New("normal packet mismatch")
+		return cl.drop("packet mismatch", slog.Int("id", int(pk.Id)), slog.Int("handler", int(cl.stageHandler.handlePacketId())))
 	}
 
 	if cl.currentStage != cl.stageHandler.handleClientStage() {
-		return tracerr.New("normal stage mismatch")
+		return cl.drop("handler mismatch", slog.Int("stage", int(cl.currentStage)), slog.Int("handler", int(cl.stageHandler.handleClientStage())))
 	}
 
 	if cl.stageHandler == nil {
-		return tracerr.New("normal stage handler missing")
+		return cl.drop("handler missing")
 	}
 
 	return tracerr.Wrap(cl.stageHandler.handlePacket(cl, pk))

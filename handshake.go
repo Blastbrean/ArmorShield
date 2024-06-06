@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"log/slog"
 
 	"github.com/shamaton/msgpack/v2"
 	"github.com/zenazn/pkcs7pad"
@@ -134,14 +135,14 @@ func (sh handshakeHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	kr, err := findKeyById(cl, sh.bsh.keyId)
+	kr, err := cl.app.Dao().FindRecordById("keys", sh.bsh.keyId)
 	if err != nil {
-		return err
+		return cl.drop("failed to get key", slog.String("error", err.Error()))
 	}
 
 	sr := kr.ExpandedOne("script")
 	if sr == nil {
-		return tracerr.New("script expand fail")
+		return cl.drop("failed to get script from key", slog.Any("record", kr))
 	}
 
 	bp := make([]byte, 32)
