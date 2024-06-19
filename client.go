@@ -38,7 +38,7 @@ type client struct {
 	timestampTicker *time.Ticker
 	heartbeatTicker *time.Ticker
 
-	timestamp int64
+	timestamp uint64
 	subId     uuid.UUID
 
 	heartbeatStageHandler *heartbeatHandler
@@ -47,7 +47,7 @@ type client struct {
 
 	forcedHeartbeat map[byte]bool
 	currentStage    byte
-	sequenceNumber  uint64
+	currentSequence uint64
 
 	packets      chan Packet
 	msgs         chan Message
@@ -78,11 +78,11 @@ func (cl *client) handlePacket(msg []byte) error {
 	}
 
 	if pk.Id != cl.stageHandler.handlePacketId() {
-		return cl.drop("packet mismatch", slog.Int("id", int(pk.Id)), slog.Int("handler", int(cl.stageHandler.handlePacketId())))
+		return cl.drop("packet mismatch", slog.Int("stage", int(cl.currentStage)), slog.Int("id", int(pk.Id)), slog.Int("expected", int(cl.stageHandler.handlePacketId())))
 	}
 
 	if cl.currentStage != cl.stageHandler.handleClientStage() {
-		return cl.drop("handler mismatch", slog.Int("stage", int(cl.currentStage)), slog.Int("handler", int(cl.stageHandler.handleClientStage())))
+		return cl.drop("handler mismatch", slog.Int("stage", int(cl.currentStage)), slog.Int("id", int(pk.Id)), slog.Int("expected", int(cl.stageHandler.handleClientStage())))
 	}
 
 	if cl.stageHandler == nil {

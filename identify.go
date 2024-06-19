@@ -72,11 +72,11 @@ type joinInfo struct {
 	userFriends   []uint64
 }
 
-// Version information - can be useful while narrowing down issues or debugging, but in reality:
+// Version information - can be useful while figuring out performance or unrelated script issues, but in reality:
 // The version information is useful for determining if we're being ran in a simulated client or not.
 // Getting as much roblox-reliant information is good so there's more to replicate or spoof.
-// It's also nice to see what channels and versions our users are using.
-// This isn't really used for anything else apart from to be looked at later.
+// It's also good analytical data to see the channels and versions our users are using - new executor / rollback method.
+// This isn't really used for anything else apart from to be looked at later - maybe verify that we're on the latest version(s).
 type versionInfo struct {
 	robloxClientChannel string
 	robloxClientGitHash string
@@ -216,12 +216,12 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 
 	kr, err := cl.app.Dao().FindRecordById("keys", sh.hsh.bsh.keyId)
 	if err != nil {
-		return cl.drop("failed to get key", slog.String("error", err.Error()))
+		return cl.drop("failed to get key data", slog.String("error", err.Error()))
 	}
 
 	ar, fr, sr, jr, err := expectIdentifiers(cl, &im, kr)
 	if err != nil {
-		return cl.drop("expected identifiers", slog.Any("records", []*models.Record{ar, fr, sr, jr}), slog.String("error", err.Error()))
+		return cl.drop("expected identifiers from key", slog.Any("records", []*models.Record{ar, fr, sr, jr}), slog.String("error", err.Error()))
 	}
 
 	if err := checkBlacklist(cl, &im.ki.fi, &im.si.si); err != nil {

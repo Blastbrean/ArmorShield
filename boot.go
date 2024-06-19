@@ -11,7 +11,7 @@ import (
 // The boot message is information sent from the server to initiate the client
 type BootMessage struct {
 	BaseTimestamp uint64
-	SubId         string
+	SubId         [16]byte
 }
 
 // The boot response is information sent from the client to initiate the server
@@ -28,7 +28,7 @@ type bootStageHandler struct {
 func (sh bootStageHandler) blacklistKey(cl *client, reason string, attrs ...any) error {
 	kr, err := cl.app.Dao().FindRecordById("keys", sh.keyId)
 	if err != nil {
-		return cl.drop("failed to get key", slog.String("error", err.Error()))
+		return cl.drop("failed to get key data", slog.String("error", err.Error()))
 	}
 
 	form := forms.NewRecordUpsert(cl.app, kr)
@@ -53,7 +53,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 
 	kr, err := cl.app.Dao().FindRecordById("keys", br.KeyId)
 	if err != nil {
-		return cl.drop("failed to get key", slog.String("error", err.Error()))
+		return cl.drop("key not found", slog.String("error", err.Error()))
 	}
 
 	reason := kr.GetString("blacklist")
@@ -61,6 +61,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		return cl.drop("key is blacklisted", slog.String("blacklist", reason))
 	}
 
+	sh.keyId = br.KeyId
 	cl.currentStage = ClientStageHandshake
 	cl.stageHandler = handshakeHandler{hmacKey: [32]byte{}, aesKey: [32]byte{}, bsh: sh}
 

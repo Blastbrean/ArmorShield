@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"log/slog"
 
@@ -51,52 +52,62 @@ func (sh handshakeHandler) marshalMessage(cl *client, v interface{}) ([]byte, er
 		return da, tracerr.Wrap(err)
 	}
 
+	pb := pkcs7pad.Pad(da, aes.BlockSize)
 	mode := cipher.NewCBCEncrypter(block, iv)
-	mode.CryptBlocks(da, da)
-
-	mac := hmac.New(sha256.New, sh.hmacKey[:])
-	mac.Write(append(da, VersionSWS100, byte(cl.sequenceNumber)))
-
-	da = append(da, iv[:]...)
-	da = append(da, mac.Sum(nil)[:]...)
-
-	return da, nil
-}
-
-// Unmarshal message
-func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface{}) error {
-	if len(data) < 32 {
-		return tracerr.New("message too short")
-	}
-
-	da := data[:32]
-	em := data[len(data)-32:]
+	mode.CryptBlocks(pb, pb)
 
 	seq := make([]byte, 8)
 	ts := make([]byte, 8)
 
-	binary.LittleEndian.PutUint64(seq, cl.sequenceNumber)
+	binary.LittleEndian.PutUint64(seq, cl.currentSequence)
 	binary.LittleEndian.PutUint64(ts, uint64(cl.timestamp))
 
 	mac := hmac.New(sha256.New, sh.hmacKey[:])
-	mac.Write(append(da, VersionSWS100))
+	mac.Write(da)
+	mac.Write([]byte{VersionSWS100})
+	mac.Write(seq)
+	mac.Write(ts)
+	mac.Write(cl.subId[:])
+
+	fin := append(mac.Sum(nil), iv[:]...)
+	fin = append(fin, da[:]...)
+
+	return fin, nil
+}
+
+// Unmarshal message
+func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface{}) error {
+	if len(data) < 48 {
+		return tracerr.New("message too short")
+	}
+
+	em := data[:32]
+	iv := data[32:48]
+	ct := data[48:]
+
+	if len(ct) < aes.BlockSize {
+		return tracerr.New("cipher text too short")
+	}
+
+	if len(ct)%aes.BlockSize != 0 {
+		return tracerr.New("invalid cipher text")
+	}
+
+	seq := make([]byte, 8)
+	ts := make([]byte, 8)
+
+	binary.LittleEndian.PutUint64(seq, cl.currentSequence)
+	binary.LittleEndian.PutUint64(ts, uint64(cl.timestamp))
+
+	mac := hmac.New(sha256.New, sh.hmacKey[:])
+	mac.Write(ct)
+	mac.Write([]byte{VersionSWS100})
 	mac.Write(seq)
 	mac.Write(ts)
 	mac.Write(cl.subId[:])
 
 	if !hmac.Equal(mac.Sum(nil), em) {
-		return tracerr.New("message tampered")
-	}
-
-	if len(da) < aes.BlockSize {
-		return tracerr.New("cipher text too short")
-	}
-
-	da = da[:aes.BlockSize]
-	iv := da[len(da)-aes.BlockSize:]
-
-	if len(da)%aes.BlockSize != 0 {
-		return tracerr.New("invalid cipher text")
+		return tracerr.New("mac signature verification failed")
 	}
 
 	block, err := aes.NewCipher(sh.aesKey[:])
@@ -105,14 +116,14 @@ func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface
 	}
 
 	mode := cipher.NewCBCDecrypter(block, iv)
-	mode.CryptBlocks(da, da)
+	mode.CryptBlocks(ct, ct)
 
-	da, err = pkcs7pad.Unpad(da)
+	ct, err = pkcs7pad.Unpad(ct)
 	if err != nil {
 		return err
 	}
 
-	return tracerr.Wrap(msgpack.Unmarshal(da, &v))
+	return tracerr.Wrap(msgpack.Unmarshal(ct, &v))
 }
 
 // Send message through handshake handler.
@@ -137,22 +148,24 @@ func (sh handshakeHandler) handlePacket(cl *client, pk Packet) error {
 
 	kr, err := cl.app.Dao().FindRecordById("keys", sh.bsh.keyId)
 	if err != nil {
-		return cl.drop("failed to get key", slog.String("error", err.Error()))
+		return cl.drop("failed to get key data", slog.String("error", err.Error()))
+	}
+
+	if errs := cl.app.Dao().ExpandRecord(kr, []string{"script"}, nil); len(errs) > 0 {
+		return cl.drop("failed to expand record", slog.Any("errors", errs), slog.String("record", kr.GetId()))
 	}
 
 	sr := kr.ExpandedOne("script")
 	if sr == nil {
-		return cl.drop("failed to get script from key", slog.Any("record", kr))
+		return cl.drop("failed to get script from key", slog.String("record", kr.GetId()))
 	}
 
-	bp := make([]byte, 32)
-	err = sr.UnmarshalJSONField("point", bp)
+	bp, err := base64.StdEncoding.DecodeString(sr.GetString("point"))
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
 
-	st := make([]byte, 32)
-	err = sr.UnmarshalJSONField("salt", st)
+	st, err := base64.StdEncoding.DecodeString(sr.GetString("salt"))
 	if err != nil {
 		return tracerr.Wrap(err)
 	}

@@ -94,8 +94,9 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 		defer cancel()
 
 		_, rr, err := c.Reader(ctx)
+		_, ok := ctx.Deadline()
 
-		if errors.Is(err, net.ErrClosed) {
+		if ok && errors.Is(err, net.ErrClosed) {
 			return nil
 		}
 
@@ -116,7 +117,7 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 			return tracerr.Wrap(err)
 		}
 
-		cl.sequenceNumber += 1
+		cl.currentSequence += 1
 	}
 }
 
@@ -144,7 +145,7 @@ func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.
 			return tracerr.Wrap(err)
 		}
 
-		cl.sequenceNumber += 1
+		cl.currentSequence += 1
 	}
 }
 
@@ -159,7 +160,6 @@ func (ls *loaderServer) timePump(ctx context.Context, cl *client, _ *websocket.C
 		case <-cl.heartbeatTicker.C:
 			cl.logger.Info("heartbeat tick")
 		case <-cl.timestampTicker.C:
-			cl.logger.Info("timestamp tick")
 			cl.timestamp += 1
 		case <-ctx.Done():
 			return tracerr.Wrap(ctx.Err())
@@ -190,12 +190,15 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 		heartbeatTicker: time.NewTicker(10 * time.Second),
 
 		subId:     subId,
-		timestamp: time.Now().Unix(),
+		timestamp: uint64(time.Now().Unix()),
 
 		reportStageHandler:    nil,
 		heartbeatStageHandler: nil,
 		stageHandler:          bootStageHandler{keyId: ""},
-		currentStage:          ClientStageBoot,
+		forcedHeartbeat:       map[byte]bool{},
+
+		currentStage:    ClientStageBoot,
+		currentSequence: 0,
 
 		packets:      make(chan Packet, ls.packetBufferLimit),
 		msgs:         make(chan Message, ls.messageBufferLimit),
@@ -240,16 +243,15 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 
 	mu.Unlock()
 
-	errs, ctx := errgroup.WithContext(ctx)
+	cl.msgs <- Message{Id: PacketIdBootstrap, Data: BootMessage{
+		BaseTimestamp: uint64(cl.timestamp),
+		SubId:         cl.subId,
+	}}
 
+	errs, ctx := errgroup.WithContext(ctx)
 	errs.Go(func() error { return tracerr.Wrap(ls.timePump(ctx, cl, c)) })
 	errs.Go(func() error { return tracerr.Wrap(ls.readPump(ctx, cl, c)) })
 	errs.Go(func() error { return tracerr.Wrap(ls.writePump(ctx, cl, c)) })
-
-	cl.msgs <- Message{Id: PacketIdBootstrap, Data: BootMessage{
-		BaseTimestamp: uint64(cl.timestamp),
-		SubId:         cl.subId.String(),
-	}}
 
 	return cl, errs.Wait()
 }
