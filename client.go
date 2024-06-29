@@ -33,10 +33,8 @@ type Message struct {
 // Packets and messages are queued in a channel to the client from the server.
 // If they're too slow to keep up with the packets or messages, they'll be removed.
 type client struct {
-	app    *pocketbase.PocketBase
-	logger *slog.Logger
-
-	timestampTicker *time.Ticker
+	app             *pocketbase.PocketBase
+	logger          *slog.Logger
 	heartbeatTicker *time.Ticker
 
 	timestamp uint64

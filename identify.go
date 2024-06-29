@@ -57,16 +57,13 @@ type SessionInfo struct {
 	WorkspaceScan   []string
 }
 
-// Join information - this is useful for buyer analysis, investigation / harmless fun, and account information.
-// We can determine how long users are spending time with our script.
-// We're also able to determine what specific server and place a user joined at.
+// Join information - this is useful for buyer analysis, investigation, and account information.
+// We can determine what games are most popular with our buyers.
 // After that, we can also check for script assosiation. The server will check specific groups, following, or friends against a list.
 // It's also useful for blacklisting - we can assume that they didn't change the account they use, so we can log it.
 type JoinInfo struct {
 	UserId        int
 	PlaceId       int
-	JobId         string
-	ElapsedTime   uint64
 	UserGroups    []uint64
 	UserFollowing []uint64
 	UserFriends   []uint64
@@ -171,8 +168,6 @@ func expectIdentifiers(cl *client, im *IdentifyMessage, kr *models.Record) (*mod
 	jr, err := createNewRecord(cl, "joins", map[string]any{
 		"userId":       ji.UserId,
 		"placeId":      ji.PlaceId,
-		"jobId":        ji.JobId,
-		"elapsedTime":  ji.ElapsedTime,
 		"subscription": sbr.Id,
 	})
 
@@ -204,7 +199,7 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	if im.SubInfo.VersionInfo.LuaVersion != "Lua 5.1" {
+	if im.SubInfo.VersionInfo.LuaVersion != "Luau" {
 		return cl.drop("bad environment", slog.String("version", im.SubInfo.VersionInfo.LuaVersion))
 	}
 

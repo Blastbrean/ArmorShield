@@ -10,13 +10,13 @@ import (
 
 // The boot message is information sent from the server to initiate the client
 type BootMessage struct {
-	BaseTimestamp uint64
-	SubId         [16]byte
+	KeyId string
 }
 
-// The boot response is information sent from the client to initiate the server
+// The boot message is information sent from the client to initiate the server
 type BootResponse struct {
-	KeyId string
+	BaseTimestamp uint64
+	SubId         [16]byte
 }
 
 // Boot stage handler
@@ -45,7 +45,7 @@ func (sh bootStageHandler) blacklistKey(cl *client, reason string, attrs ...any)
 
 // Handle boot response
 func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
-	var br BootResponse
+	var br BootMessage
 	err := msgpack.Unmarshal(pk.Msg, &br)
 	if err != nil {
 		return tracerr.Wrap(err)
@@ -64,6 +64,10 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	sh.keyId = br.KeyId
 	cl.currentStage = ClientStageHandshake
 	cl.stageHandler = handshakeHandler{hmacKey: [32]byte{}, aesKey: [32]byte{}, bsh: sh}
+	cl.msgs <- Message{Id: PacketIdBootstrap, Data: BootResponse{
+		BaseTimestamp: cl.timestamp,
+		SubId:         cl.subId,
+	}}
 
 	return nil
 }

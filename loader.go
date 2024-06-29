@@ -159,8 +159,6 @@ func (ls *loaderServer) timePump(ctx context.Context, cl *client, _ *websocket.C
 		select {
 		case <-cl.heartbeatTicker.C:
 			cl.sendHeartbeat()
-		case <-cl.timestampTicker.C:
-			cl.timestamp += 1
 		case <-ctx.Done():
 			return tracerr.Wrap(ctx.Err())
 		case <-cl.readerClosed:
@@ -183,10 +181,8 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 	subId := uuid.New()
 
 	cl = &client{
-		app:    ls.app,
-		logger: ls.app.Logger().WithGroup(subId.String()),
-
-		timestampTicker: time.NewTicker(1 * time.Second),
+		app:             ls.app,
+		logger:          ls.app.Logger().WithGroup(subId.String()),
 		heartbeatTicker: time.NewTicker(10 * time.Second),
 
 		subId:     subId,
@@ -258,11 +254,6 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 	c = c2
 
 	mu.Unlock()
-
-	cl.msgs <- Message{Id: PacketIdBootstrap, Data: BootMessage{
-		BaseTimestamp: uint64(cl.timestamp),
-		SubId:         cl.subId,
-	}}
 
 	errs, ctx := errgroup.WithContext(ctx)
 	errs.Go(func() error { return tracerr.Wrap(ls.timePump(ctx, cl, c)) })
