@@ -1,8 +1,6 @@
 package main
 
 import (
-	"log/slog"
-
 	"github.com/ztrue/tracerr"
 )
 
@@ -27,8 +25,9 @@ func (sh heartbeatHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	cl.forcedHeartbeat[cl.currentStage] = true
-	cl.logger.Warn("client sent heartbeat", slog.String("test", im.Test))
+	if !cl.forcedHeartbeat[cl.currentStage] {
+		cl.forcedHeartbeat[cl.currentStage] = true
+	}
 
 	return nil
 }
