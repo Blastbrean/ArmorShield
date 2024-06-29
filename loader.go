@@ -41,7 +41,7 @@ type loaderServer struct {
 	app *pocketbase.PocketBase
 }
 
-// This function will write a Packet to the websocket connection.
+// This function will write a packet to the websocket connection.
 func writePacket(ctx context.Context, c *websocket.Conn, pk Packet) error {
 	ser, err := msgpack.Marshal(pk)
 	if err != nil {
@@ -84,13 +84,13 @@ func (ls *loaderServer) subscribeHandler(ctx echo.Context) {
 }
 
 // This listens for new packets sent by the client and handles them.
-// If we don't recieve a new message within 10 seconds, we'll drop the client.
+// If we don't recieve a new message within 15 seconds, we'll drop the client.
 func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.Conn) error {
 	defer c.CloseNow()
 	defer close(cl.readerClosed)
 
 	for {
-		ctx, cancel := context.WithTimeout(ctx, time.Second*10)
+		ctx, cancel := context.WithTimeout(ctx, time.Second*15)
 		defer cancel()
 
 		_, rr, err := c.Reader(ctx)
@@ -112,12 +112,12 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 			return err
 		}
 
+		cl.currentSequence += 1
+
 		err = cl.handlePacket(b.Bytes())
 		if err != nil {
 			return tracerr.Wrap(err)
 		}
-
-		cl.currentSequence += 1
 	}
 }
 
@@ -132,8 +132,10 @@ func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.
 
 		select {
 		case pk := <-cl.packets:
+			cl.currentSequence += 1
 			err = writePacket(ctx, c, pk)
 		case msg := <-cl.msgs:
+			cl.currentSequence += 1
 			err = writeMessage(ctx, c, msg)
 		case <-ctx.Done():
 			return tracerr.Wrap(ctx.Err())
@@ -144,8 +146,6 @@ func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.
 		if err != nil {
 			return tracerr.Wrap(err)
 		}
-
-		cl.currentSequence += 1
 	}
 }
 
@@ -158,7 +158,7 @@ func (ls *loaderServer) timePump(ctx context.Context, cl *client, _ *websocket.C
 
 		select {
 		case <-cl.heartbeatTicker.C:
-			cl.logger.Info("heartbeat tick")
+			cl.sendHeartbeat()
 		case <-cl.timestampTicker.C:
 			cl.timestamp += 1
 		case <-ctx.Done():
@@ -194,6 +194,7 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 
 		reportStageHandler:    nil,
 		heartbeatStageHandler: nil,
+		handshakeStageHandler: nil,
 		stageHandler:          bootStageHandler{keyId: ""},
 		forcedHeartbeat:       map[byte]bool{},
 
@@ -206,6 +207,21 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 
 		getRemoteAddr: func() string {
 			return r.RemoteAddr
+		},
+
+		fail: func(reason string, err error, args ...any) error {
+			mu.Lock()
+			defer mu.Unlock()
+			closed = true
+
+			attrs := append([]any{slog.String("error", err.Error()), slog.Any("traceback", tracerr.StackTrace(err))}, args...)
+			cl.logger.Error("failed connection", attrs...)
+
+			if c != nil {
+				return tracerr.Wrap(c.Close(websocket.StatusNormalClosure, reason))
+			}
+
+			return tracerr.New("no connection to drop")
 		},
 
 		drop: func(reason string, args ...any) error {

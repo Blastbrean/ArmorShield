@@ -20,6 +20,7 @@ const (
 	ClientStageBoot = iota
 	ClientStageHandshake
 	ClientStageIdentify
+	ClientStageLoad
 )
 
 // Message communication type
@@ -41,6 +42,7 @@ type client struct {
 	timestamp uint64
 	subId     uuid.UUID
 
+	handshakeStageHandler *handshakeHandler
 	heartbeatStageHandler *heartbeatHandler
 	reportStageHandler    *reportHandler
 	stageHandler          stageHandler
@@ -54,10 +56,27 @@ type client struct {
 	readerClosed chan struct{}
 
 	getRemoteAddr func() string
+	fail          func(reason string, err error, args ...any) error
 	drop          func(reason string, args ...any) error
 }
 
-// Handle Packet.
+// Send heartbeat.
+func (cl *client) sendHeartbeat() error {
+	if cl.currentStage <= ClientStageHandshake {
+		return tracerr.New("invalid heartbeat client stage")
+	}
+
+	if cl.handshakeStageHandler == nil {
+		return tracerr.New("handshake stage handler missing")
+	}
+
+	return cl.handshakeStageHandler.sendMessage(cl, Message{
+		Id:   PacketIdHeartbeat,
+		Data: HeartbeatMessage{},
+	})
+}
+
+// Handle packet.
 func (cl *client) handlePacket(msg []byte) error {
 	var pk Packet
 	err := msgpack.Unmarshal(msg, &pk)
@@ -74,7 +93,7 @@ func (cl *client) handlePacket(msg []byte) error {
 	}
 
 	if cl.currentStage >= ClientStageIdentify && !cl.forcedHeartbeat[cl.currentStage] {
-		return cl.drop("heartbeat fail", slog.Int("stage", int(cl.currentStage)))
+		return cl.drop("no forced heartbeat", slog.Int("stage", int(cl.currentStage)))
 	}
 
 	if pk.Id != cl.stageHandler.handlePacketId() {

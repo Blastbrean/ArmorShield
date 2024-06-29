@@ -7,7 +7,10 @@ import (
 )
 
 // The heartbeat message is to signal to the client we want a beat back
-type HeartbeatMessage struct {
+type HeartbeatMessage struct{}
+
+// The heartbeat response is the client's response
+type HeartbeatResponse struct {
 	Test string
 }
 
@@ -18,7 +21,7 @@ type heartbeatHandler struct {
 
 // Handle heartbeat
 func (sh heartbeatHandler) handlePacket(cl *client, pk Packet) error {
-	var im HeartbeatMessage
+	var im HeartbeatResponse
 	err := sh.hsh.unmarshalMessage(cl, pk.Msg, &im)
 	if err != nil {
 		return tracerr.Wrap(err)

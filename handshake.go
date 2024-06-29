@@ -53,24 +53,26 @@ func (sh handshakeHandler) marshalMessage(cl *client, v interface{}) ([]byte, er
 	}
 
 	pb := pkcs7pad.Pad(da, aes.BlockSize)
+	eb := make([]byte, len(pb))
+
 	mode := cipher.NewCBCEncrypter(block, iv)
-	mode.CryptBlocks(pb, pb)
+	mode.CryptBlocks(eb, pb)
 
 	seq := make([]byte, 8)
 	ts := make([]byte, 8)
 
-	binary.LittleEndian.PutUint64(seq, cl.currentSequence)
-	binary.LittleEndian.PutUint64(ts, uint64(cl.timestamp))
+	binary.LittleEndian.PutUint64(seq, cl.currentSequence+1)
+	binary.LittleEndian.PutUint64(ts, cl.timestamp)
 
 	mac := hmac.New(sha256.New, sh.hmacKey[:])
-	mac.Write(da)
+	mac.Write(eb)
 	mac.Write([]byte{VersionSWS100})
 	mac.Write(seq)
 	mac.Write(ts)
 	mac.Write(cl.subId[:])
 
 	fin := append(mac.Sum(nil), iv[:]...)
-	fin = append(fin, da[:]...)
+	fin = append(fin, eb[:]...)
 
 	return fin, nil
 }
@@ -97,7 +99,7 @@ func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface
 	ts := make([]byte, 8)
 
 	binary.LittleEndian.PutUint64(seq, cl.currentSequence)
-	binary.LittleEndian.PutUint64(ts, uint64(cl.timestamp))
+	binary.LittleEndian.PutUint64(ts, cl.timestamp)
 
 	mac := hmac.New(sha256.New, sh.hmacKey[:])
 	mac.Write(ct)
@@ -200,6 +202,7 @@ func (sh handshakeHandler) handlePacket(cl *client, pk Packet) error {
 
 	cl.currentStage = ClientStageIdentify
 	cl.stageHandler = identifyHandler{hsh: sh}
+	cl.handshakeStageHandler = &sh
 	cl.heartbeatStageHandler = &heartbeatHandler{hsh: sh}
 	cl.reportStageHandler = &reportHandler{hsh: sh}
 	cl.msgs <- Message{Id: sh.handlePacketId(), Data: HandshakeResponse{

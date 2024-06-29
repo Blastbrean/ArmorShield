@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log/slog"
+
 	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
 )
@@ -9,12 +11,17 @@ import (
 // Assuming that the client is currently safe - we'll rely on this being the main way to report something as it is instant and responsive.
 // Else, we'll rely on a forced heartbeat sending our security data to fallback on - so we know that they **HAVE** to send it.
 type ReportMessage struct {
-	Reason string
+	Code byte
 }
 
 // Report handler
 type reportHandler struct {
 	hsh handshakeHandler
+}
+
+// Report code to reason map
+var ReportCodeToReasonMap = map[byte]string{
+	0x1: "failure",
 }
 
 // Handle report
@@ -25,7 +32,5 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	cl.logger.Warn("client sent report", "reason", br.Reason)
-
-	return nil
+	return sh.hsh.bsh.blacklistKey(cl, ReportCodeToReasonMap[br.Code], slog.Int("code", int(br.Code)))
 }

@@ -27,8 +27,8 @@ func createNewRecord(cl *client, nameOrId string, data map[string]any) (*models.
 
 // Expect record linked to a key - else create one
 func expectKeyedRecord(cl *client, kr *models.Record, nameOrId string, data map[string]any) (*models.Record, error) {
-	ar, err := cl.app.Dao().FindFirstRecordByFilter(nameOrId, "key = {:keyId}", dbx.Params{"keyId": kr.Id})
-	if ar != nil && err == nil {
+	ar, _ := cl.app.Dao().FindFirstRecordByFilter(nameOrId, "key = {:keyId}", dbx.Params{"keyId": kr.Id})
+	if ar != nil {
 		return ar, nil
 	}
 

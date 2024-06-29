@@ -28,7 +28,7 @@ type bootStageHandler struct {
 func (sh bootStageHandler) blacklistKey(cl *client, reason string, attrs ...any) error {
 	kr, err := cl.app.Dao().FindRecordById("keys", sh.keyId)
 	if err != nil {
-		return cl.drop("failed to get key data", slog.String("error", err.Error()))
+		return cl.fail("failed to get key data", err)
 	}
 
 	form := forms.NewRecordUpsert(cl.app, kr)
@@ -53,7 +53,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 
 	kr, err := cl.app.Dao().FindRecordById("keys", br.KeyId)
 	if err != nil {
-		return cl.drop("key not found", slog.String("error", err.Error()))
+		return cl.fail("key not found", err)
 	}
 
 	reason := kr.GetString("blacklist")

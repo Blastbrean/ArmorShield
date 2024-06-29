@@ -17,30 +17,30 @@ import (
 // This will be later matched to check if it's blacklisted or not.
 // We need as many identifiers as we can get to prevent false positives.
 // Some of these identifiers will be saved will be used to check for change in identifiers.
-type analyticsInfo struct {
-	clientId            string
-	browserTrackerId    string
-	systemLocaleId      string
-	outputDevices       []string
-	inputDevices        []string
-	cameraDevices       []string
-	hasHyperion         bool
-	hasTouchscreen      bool
-	hasGyroscope        bool
-	cpuFrequency        float64
-	displayResolution   [2]int
-	timezone            string
-	region              string
-	daylightSavingsTime bool
+type AnalyticsInfo struct {
+	ClientId            string
+	BrowserTrackerId    string
+	SystemLocaleId      string
+	OutputDevices       []string
+	InputDevices        []string
+	CameraDevices       []string
+	HasHyperion         bool
+	HasTouchscreen      bool
+	HasGyroscope        bool
+	CpuFrequency        float64
+	DisplayResolution   [2]int
+	Timezone            string
+	Region              string
+	DaylightSavingsTime bool
 }
 
 // Fingerprint information - small list of reliable identifiers.
 // This is used for doing the main blacklist or hardware change checks.
-type fingerprintInfo struct {
-	deviceId    string
-	deviceType  byte
-	exploitHwid string
-	exploitName string
+type FingerprintInfo struct {
+	DeviceId    string
+	DeviceType  byte
+	ExploitHwid string
+	ExploitName string
 }
 
 // Session information - this is useful for determining past accounts and past sessions.
@@ -50,11 +50,11 @@ type fingerprintInfo struct {
 // 3. The user has not restarted their computer.
 // Through this information - and one of these things are true, we can blacklist a user with reasonable suspicion.
 // The workspace directory is saved here for manual look - maybe there's something in this specific directory that we can look for.
-type sessionInfo struct {
-	cpuStart        float64
-	playSessionId   string
-	robloxSessionId string
-	workspaceScan   []string
+type SessionInfo struct {
+	CpuStart        float64
+	PlaySessionId   string
+	RobloxSessionId string
+	WorkspaceScan   []string
 }
 
 // Join information - this is useful for buyer analysis, investigation / harmless fun, and account information.
@@ -62,14 +62,14 @@ type sessionInfo struct {
 // We're also able to determine what specific server and place a user joined at.
 // After that, we can also check for script assosiation. The server will check specific groups, following, or friends against a list.
 // It's also useful for blacklisting - we can assume that they didn't change the account they use, so we can log it.
-type joinInfo struct {
-	userId        int
-	placeId       int
-	jobId         string
-	elapsedTime   uint64
-	userGroups    []uint64
-	userFollowing []uint64
-	userFriends   []uint64
+type JoinInfo struct {
+	UserId        int
+	PlaceId       int
+	JobId         string
+	ElapsedTime   uint64
+	UserGroups    []uint64
+	UserFollowing []uint64
+	UserFriends   []uint64
 }
 
 // Version information - can be useful while figuring out performance or unrelated script issues, but in reality:
@@ -77,39 +77,33 @@ type joinInfo struct {
 // Getting as much roblox-reliant information is good so there's more to replicate or spoof.
 // It's also good analytical data to see the channels and versions our users are using - new executor / rollback method.
 // This isn't really used for anything else apart from to be looked at later - maybe verify that we're on the latest version(s).
-type versionInfo struct {
-	robloxClientChannel string
-	robloxClientGitHash string
-	robloxVersion       string
-	coreScriptVersion   string
-	luaVersion          string
+type VersionInfo struct {
+	RobloxClientChannel string
+	RobloxClientGitHash string
+	RobloxVersion       string
+	CoreScriptVersion   string
+	LuaVersion          string
 }
 
 // Websocket subscription information - specific to a connection.
 // These are never linked or saved to a specific key.
-type subInfo struct {
-	ji joinInfo
-	si sessionInfo
-	vi versionInfo
+type SubInfo struct {
+	JoinInfo    JoinInfo
+	SessionInfo SessionInfo
+	VersionInfo VersionInfo
 }
 
 // Key information - specific to a key.
 // These are linked and saved to a specific key.
-type keyInfo struct {
-	ai analyticsInfo
-	fi fingerprintInfo
+type KeyInfo struct {
+	AnalyticsInfo   AnalyticsInfo
+	FingerprintInfo FingerprintInfo
 }
 
 // The identify message is information sent from the client to identify themselves
-type identifyMessage struct {
-	ki keyInfo
-	si subInfo
-	vi versionInfo
-}
-
-// The identify response is information sent from the server to send over role data
-type identifyResponse struct {
-	role string
+type IdentifyMessage struct {
+	KeyInfo KeyInfo
+	SubInfo SubInfo
 }
 
 // Identify handler
@@ -118,16 +112,16 @@ type identifyHandler struct {
 }
 
 // Expect identifiers
-func expectIdentifiers(cl *client, im *identifyMessage, kr *models.Record) (*models.Record, *models.Record, *models.Record, *models.Record, error) {
-	ai := im.ki.ai
+func expectIdentifiers(cl *client, im *IdentifyMessage, kr *models.Record) (*models.Record, *models.Record, *models.Record, *models.Record, error) {
+	ai := im.KeyInfo.AnalyticsInfo
 	aid, err := ai.hash()
 	if err != nil {
 		return nil, nil, nil, nil, tracerr.Wrap(err)
 	}
 
 	sbr, err := createNewRecord(cl, "subscriptions", map[string]any{
-		"sid": cl.subId.String(),
 		"key": kr.Id,
+		"sid": cl.subId.String(),
 	})
 
 	if err != nil {
@@ -136,9 +130,9 @@ func expectIdentifiers(cl *client, im *identifyMessage, kr *models.Record) (*mod
 
 	ar, err := expectKeyedRecord(cl, kr, "analytics", map[string]any{
 		"aid":    aid,
-		"dst":    ai.daylightSavingsTime,
-		"region": ai.region,
-		"locale": ai.systemLocaleId,
+		"dst":    ai.DaylightSavingsTime,
+		"region": ai.Region,
+		"locale": ai.SystemLocaleId,
 		"key":    kr.Id,
 	})
 
@@ -146,12 +140,12 @@ func expectIdentifiers(cl *client, im *identifyMessage, kr *models.Record) (*mod
 		return nil, nil, nil, nil, tracerr.Wrap(err)
 	}
 
-	fi := im.ki.fi
-	fr, err := expectKeyedRecord(cl, kr, "fingerprint", map[string]any{
-		"deviceType":  fi.deviceType,
-		"deviceId":    fi.deviceId,
-		"exploitHwid": fi.exploitHwid,
-		"exploitName": fi.exploitName,
+	fi := im.KeyInfo.FingerprintInfo
+	fr, err := expectKeyedRecord(cl, kr, "fingerprints", map[string]any{
+		"deviceType":  fi.DeviceType,
+		"deviceId":    fi.DeviceId,
+		"exploitHwid": fi.ExploitHwid,
+		"exploitName": fi.ExploitName,
 		"ipAddress":   cl.getRemoteAddr(),
 		"key":         kr.Id,
 	})
@@ -160,12 +154,12 @@ func expectIdentifiers(cl *client, im *identifyMessage, kr *models.Record) (*mod
 		return nil, nil, nil, nil, tracerr.Wrap(err)
 	}
 
-	si := im.si.si
+	si := im.SubInfo.SessionInfo
 	sr, err := createNewRecord(cl, "sessions", map[string]any{
-		"cpuStart":        si.cpuStart,
-		"playSessionId":   si.playSessionId,
-		"robloxSessionId": si.robloxSessionId,
-		"workspaceScan":   si.workspaceScan,
+		"cpuStart":        si.CpuStart,
+		"playSessionId":   si.PlaySessionId,
+		"robloxSessionId": si.RobloxSessionId,
+		"workspaceScan":   si.WorkspaceScan,
 		"subscription":    sbr.Id,
 	})
 
@@ -173,12 +167,12 @@ func expectIdentifiers(cl *client, im *identifyMessage, kr *models.Record) (*mod
 		return nil, nil, nil, nil, tracerr.Wrap(err)
 	}
 
-	ji := im.si.ji
+	ji := im.SubInfo.JoinInfo
 	jr, err := createNewRecord(cl, "joins", map[string]any{
-		"userId":       ji.userId,
-		"placeId":      ji.placeId,
-		"jobId":        ji.jobId,
-		"elapsedTime":  ji.elapsedTime,
+		"userId":       ji.UserId,
+		"placeId":      ji.PlaceId,
+		"jobId":        ji.JobId,
+		"elapsedTime":  ji.ElapsedTime,
 		"subscription": sbr.Id,
 	})
 
@@ -190,7 +184,7 @@ func expectIdentifiers(cl *client, im *identifyMessage, kr *models.Record) (*mod
 }
 
 // Hash analytics information
-func (ai *analyticsInfo) hash() (string, error) {
+func (ai *AnalyticsInfo) hash() (string, error) {
 	aib, err := msgpack.Marshal(ai)
 	if err != nil {
 		return "", tracerr.Wrap(err)
@@ -204,45 +198,40 @@ func (ai *analyticsInfo) hash() (string, error) {
 
 // Handle identification message
 func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
-	var im identifyMessage
+	var im IdentifyMessage
 	err := sh.hsh.unmarshalMessage(cl, pk.Msg, &im)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
 
-	if im.vi.luaVersion != "Lua 5.1" {
-		return cl.drop("bad environment", slog.String("version", im.vi.luaVersion))
+	if im.SubInfo.VersionInfo.LuaVersion != "Lua 5.1" {
+		return cl.drop("bad environment", slog.String("version", im.SubInfo.VersionInfo.LuaVersion))
 	}
 
 	kr, err := cl.app.Dao().FindRecordById("keys", sh.hsh.bsh.keyId)
 	if err != nil {
-		return cl.drop("failed to get key data", slog.String("error", err.Error()))
+		return cl.fail("failed to get key data", err)
 	}
 
 	ar, fr, sr, jr, err := expectIdentifiers(cl, &im, kr)
 	if err != nil {
-		return cl.drop("expected identifiers from key", slog.Any("records", []*models.Record{ar, fr, sr, jr}), slog.String("error", err.Error()))
+		return cl.fail("expected identifiers from key", err, slog.Any("records", []*models.Record{ar, fr, sr, jr}))
 	}
 
-	if err := checkBlacklist(cl, &im.ki.fi, &im.si.si); err != nil {
+	if err := checkBlacklist(cl, &im.KeyInfo.FingerprintInfo, &im.SubInfo.SessionInfo); err != nil {
 		return sh.hsh.bsh.blacklistKey(cl, "active blacklist", slog.String("error", err.Error()))
 	}
 
-	if err := checkMismatch(&im.ki.fi, fr, ar, &im.ki.ai); err != nil {
+	if err := checkMismatch(&im.KeyInfo.FingerprintInfo, fr, ar, &im.KeyInfo.AnalyticsInfo); err != nil {
 		return cl.drop("information mismatch", slog.String("error", err.Error()))
 	}
 
-	if err := checkAssosiation(&im.si.ji); err != nil && !jr.GetBool("cleared") {
+	if err := checkAssosiation(&im.SubInfo.JoinInfo); err != nil && !jr.GetBool("cleared") {
 		return cl.drop("suspicious activity", slog.String("error", err.Error()))
 	}
 
-	err = sh.hsh.sendMessage(cl, Message{Id: sh.handlePacketId(), Data: identifyResponse{
-		role: ar.GetString("role"),
-	}})
-
-	if err != nil {
-		return tracerr.Wrap(err)
-	}
+	cl.currentStage = ClientStageLoad
+	cl.stageHandler = loadStageHandler(sh)
 
 	return nil
 }

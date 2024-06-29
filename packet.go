@@ -20,4 +20,5 @@ const (
 	PacketIdReport
 	PacketIdHeartbeat
 	PacketIdIdentify
+	PacketIdLoad
 )
