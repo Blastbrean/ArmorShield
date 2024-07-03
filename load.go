@@ -3,11 +3,20 @@ package main
 import (
 	"io"
 	"log/slog"
+
+	"github.com/pocketbase/dbx"
+	"github.com/ztrue/tracerr"
 )
 
-// The load response will give the client the script to load
+// The loader message will give the server what game it's currently on
+type LoadMessage struct {
+	GameId uint64
+}
+
+// The load response will give the client the script to load & send the client it's current role
 type LoadResponse struct {
-	Script string
+	CurrentRole string
+	Script      string
 }
 
 // Load script handler
@@ -20,21 +29,32 @@ const EXPECTED_SCRIPT_FILE_SIZE = int64(5243000)
 
 // Handle load script
 func (sh loadStageHandler) handlePacket(cl *client, pk Packet) error {
+	var lm LoadMessage
+	err := sh.hsh.unmarshalMessage(cl, pk.Msg, &lm)
+	if err != nil {
+		return tracerr.Wrap(err)
+	}
+
 	kr, err := cl.app.Dao().FindRecordById("keys", sh.hsh.bsh.keyId)
 	if err != nil {
 		return cl.fail("failed to get key data", err)
 	}
 
-	if errs := cl.app.Dao().ExpandRecord(kr, []string{"script"}, nil); len(errs) > 0 {
+	if errs := cl.app.Dao().ExpandRecord(kr, []string{"project"}, nil); len(errs) > 0 {
 		return cl.drop("failed to expand record", slog.Any("errors", errs), slog.String("record", kr.GetId()))
 	}
 
-	sr := kr.ExpandedOne("script")
-	if sr == nil {
-		return cl.drop("failed to get script from key", slog.String("record", kr.GetId()))
+	pr := kr.ExpandedOne("project")
+	if pr == nil {
+		return cl.drop("failed to get project from key", slog.String("record", kr.GetId()))
 	}
 
-	key := sr.BaseFilesPath() + "/" + sr.GetString("script")
+	sr, err := cl.app.Dao().FindFirstRecordByFilter("scripts", "project = {:projectId} && game = {:gameId}", dbx.Params{"projectId": pr.GetId(), "gameId": lm.GameId})
+	if err != nil {
+		return cl.fail("failed to find matching script", err)
+	}
+
+	key := sr.BaseFilesPath() + "/" + sr.GetString("file")
 
 	fsys, _ := cl.app.NewFilesystem()
 	defer fsys.Close()
@@ -52,7 +72,7 @@ func (sh loadStageHandler) handlePacket(cl *client, pk Packet) error {
 
 	sh.hsh.sendMessage(cl, Message{
 		Id:   pk.Id,
-		Data: LoadResponse{Script: b.String()},
+		Data: LoadResponse{CurrentRole: kr.GetString("role"), Script: b.String()},
 	})
 
 	return nil

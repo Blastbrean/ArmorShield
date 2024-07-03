@@ -19,8 +19,8 @@ type heartbeatHandler struct {
 
 // Handle heartbeat
 func (sh heartbeatHandler) handlePacket(cl *client, pk Packet) error {
-	var im HeartbeatResponse
-	err := sh.hsh.unmarshalMessage(cl, pk.Msg, &im)
+	var hr HeartbeatResponse
+	err := sh.hsh.unmarshalMessage(cl, pk.Msg, &hr)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}

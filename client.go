@@ -23,6 +23,16 @@ const (
 	ClientStageLoad
 )
 
+// Drop packet
+type DropPacket struct {
+	Reason string
+}
+
+// Key update packet
+type KeyUpdatePacket struct {
+	Role string
+}
+
 // Message communication type
 type Message struct {
 	Id   byte
@@ -43,6 +53,9 @@ type client struct {
 	handshakeStageHandler *handshakeHandler
 	heartbeatStageHandler *heartbeatHandler
 	reportStageHandler    *reportHandler
+	bootStageHandler      *bootStageHandler
+
+	broadcastStageHandler broadcastHandler
 	stageHandler          stageHandler
 
 	forcedHeartbeat map[byte]bool
@@ -53,9 +66,10 @@ type client struct {
 	msgs         chan Message
 	readerClosed chan struct{}
 
-	getRemoteAddr func() string
-	fail          func(reason string, err error, args ...any) error
-	drop          func(reason string, args ...any) error
+	getRemoteAddr   func() string
+	broadcastPacket func(ocl *client, pk Packet)
+	fail            func(reason string, err error, args ...any) error
+	drop            func(reason string, args ...any) error
 }
 
 // Send heartbeat.
@@ -82,6 +96,12 @@ func (cl *client) handlePacket(msg []byte) error {
 		return tracerr.Wrap(err)
 	}
 
+	cl.logger.Info("handling packet", slog.Int("id", int(pk.Id)), slog.Int("seq", int(cl.currentSequence)))
+
+	if pk.Id == PacketIdBroadcast {
+		return tracerr.Wrap(cl.broadcastStageHandler.handlePacket(cl, pk))
+	}
+
 	if pk.Id == PacketIdHeartbeat && cl.heartbeatStageHandler != nil {
 		return tracerr.Wrap(cl.heartbeatStageHandler.handlePacket(cl, pk))
 	}
@@ -91,7 +111,7 @@ func (cl *client) handlePacket(msg []byte) error {
 	}
 
 	if cl.currentStage >= ClientStageIdentify && !cl.forcedHeartbeat[cl.currentStage] {
-		return cl.drop("no forced heartbeat", slog.Int("stage", int(cl.currentStage)))
+		return cl.drop("missed forced heartbeat", slog.Int("stage", int(cl.currentStage)))
 	}
 
 	if pk.Id != cl.stageHandler.handlePacketId() {

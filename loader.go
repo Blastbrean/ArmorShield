@@ -13,9 +13,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/models"
 	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/time/rate"
 	"nhooyr.io/websocket"
 )
 
@@ -29,6 +31,10 @@ type loaderServer struct {
 	// The "readLimitBytes" controls the max number bytes that will be read for one client.
 	// Defaults to 4096.
 	readLimitBytes int
+
+	// broadcastLimiter controls the rate limit applied to the broadcast endpoint.
+	// Defaults to one broadcast every 100ms with a burst of 8.
+	broadcastLimiter *rate.Limiter
 
 	// Logger implementation.
 	logger *slog.Logger
@@ -59,6 +65,24 @@ func writeMessage(ctx context.Context, c *websocket.Conn, msg Message) error {
 	}
 
 	return writePacket(ctx, c, Packet{Id: msg.Id, Msg: ser})
+}
+
+// This function will close the websocket connection and write a close packet.
+// Ignore any timeout or error by the close.
+// We don't care whether or not they receive a close frame since our client will not respond.
+// We do care however - if the client receives our dropping message.
+func closeConn(ctx context.Context, c *websocket.Conn, status websocket.StatusCode, reason string) error {
+	err := writeMessage(ctx, c, Message{Id: PacketIdDropping, Data: DropPacket{
+		Reason: reason,
+	}})
+
+	if err != nil {
+		return tracerr.Wrap(err)
+	}
+
+	c.Close(status, reason)
+
+	return nil
 }
 
 // This function accepts the WebSocket connection and then adds it to the list of all clients.
@@ -122,7 +146,7 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 }
 
 // This listens for new messages written to the buffer and writes them to the WebSocket.
-// If we don't write something within 30 seconds, we'll drop the client.
+// If we aren't done within 30 seconds, we'll drop the client.
 func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.Conn) error {
 	for {
 		ctx, cancel := context.WithTimeout(ctx, time.Second*30)
@@ -133,9 +157,11 @@ func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.
 		select {
 		case pk := <-cl.packets:
 			cl.currentSequence += 1
+			cl.logger.Info("writing packet", slog.Int("id", int(pk.Id)), slog.Int("seq", int(cl.currentSequence)))
 			err = writePacket(ctx, c, pk)
 		case msg := <-cl.msgs:
 			cl.currentSequence += 1
+			cl.logger.Info("writing message", slog.Int("id", int(msg.Id)), slog.Int("seq", int(cl.currentSequence)))
 			err = writeMessage(ctx, c, msg)
 		case <-ctx.Done():
 			return tracerr.Wrap(ctx.Err())
@@ -183,6 +209,7 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 	cl = &client{
 		app:             ls.app,
 		logger:          ls.app.Logger().WithGroup(subId.String()),
+		broadcastPacket: ls.broadcastPacket,
 		heartbeatTicker: time.NewTicker(10 * time.Second),
 
 		subId:     subId,
@@ -191,6 +218,9 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 		reportStageHandler:    nil,
 		heartbeatStageHandler: nil,
 		handshakeStageHandler: nil,
+		bootStageHandler:      nil,
+
+		broadcastStageHandler: broadcastHandler{},
 		stageHandler:          bootStageHandler{keyId: ""},
 		forcedHeartbeat:       map[byte]bool{},
 
@@ -214,10 +244,10 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 			cl.logger.Error("failed connection", attrs...)
 
 			if c != nil {
-				return tracerr.Wrap(c.Close(websocket.StatusNormalClosure, reason))
+				return tracerr.Wrap(closeConn(ctx, c, websocket.StatusInternalError, reason))
 			}
 
-			return tracerr.New("no connection to drop")
+			return tracerr.New("no connection to fail")
 		},
 
 		drop: func(reason string, args ...any) error {
@@ -229,7 +259,7 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 			cl.logger.Warn("dropping connection", attrs...)
 
 			if c != nil {
-				return tracerr.Wrap(c.Close(websocket.StatusNormalClosure, reason))
+				return tracerr.Wrap(closeConn(ctx, c, websocket.StatusNormalClosure, reason))
 			}
 
 			return tracerr.New("no connection to drop")
@@ -260,7 +290,30 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 	errs.Go(func() error { return tracerr.Wrap(ls.readPump(ctx, cl, c)) })
 	errs.Go(func() error { return tracerr.Wrap(ls.writePump(ctx, cl, c)) })
 
+	cl.logger.Info("client subscribed", slog.Int("timestamp", int(cl.timestamp)))
+
 	return cl, errs.Wait()
+}
+
+// This function will send a broadcast a packet to all other subscribers.
+func (ls *loaderServer) broadcastPacket(ocl *client, pk Packet) {
+	ls.clientMutex.Lock()
+	defer ls.clientMutex.Unlock()
+
+	ls.broadcastLimiter.Wait(context.Background())
+	ocl.logger.Info("broadcasting message", slog.Int("len", len(pk.Msg)))
+
+	for cl := range ls.clients {
+		if ocl == cl {
+			continue
+		}
+
+		select {
+		case cl.packets <- pk:
+		default:
+			go cl.drop("connection can't keep up with broadcast")
+		}
+	}
 }
 
 // This function adds a new client to the map.
@@ -275,4 +328,21 @@ func (ls *loaderServer) deleteClient(cl *client) {
 	ls.clientMutex.Lock()
 	delete(ls.clients, cl)
 	ls.clientMutex.Unlock()
+}
+
+// This function will get a client from a key record.
+func (ls *loaderServer) getClientFromKey(kr *models.Record) *client {
+	for cl := range ls.clients {
+		if cl.bootStageHandler == nil {
+			continue
+		}
+
+		if cl.bootStageHandler.keyId != kr.Id {
+			continue
+		}
+
+		return cl
+	}
+
+	return nil
 }

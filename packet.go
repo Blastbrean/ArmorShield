@@ -21,4 +21,8 @@ const (
 	PacketIdHeartbeat
 	PacketIdIdentify
 	PacketIdLoad
+	PacketIdDropping
+	PacketIdBroadcast
+	PacketIdData
+	PacketIdKeyUpdate
 )

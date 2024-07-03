@@ -71,6 +71,8 @@ func (sh handshakeHandler) marshalMessage(cl *client, v interface{}) ([]byte, er
 	mac.Write(ts)
 	mac.Write(cl.subId[:])
 
+	cl.logger.Info("marshal message", slog.Int("seq", int(cl.currentSequence+1)))
+
 	fin := append(mac.Sum(nil), iv[:]...)
 	fin = append(fin, eb[:]...)
 
@@ -107,6 +109,8 @@ func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface
 	mac.Write(seq)
 	mac.Write(ts)
 	mac.Write(cl.subId[:])
+
+	cl.logger.Info("unmarshal message", slog.Int("seq", int(cl.currentSequence)))
 
 	if !hmac.Equal(mac.Sum(nil), em) {
 		return tracerr.New("mac signature verification failed")
@@ -153,21 +157,21 @@ func (sh handshakeHandler) handlePacket(cl *client, pk Packet) error {
 		return cl.drop("failed to get key data", slog.String("error", err.Error()))
 	}
 
-	if errs := cl.app.Dao().ExpandRecord(kr, []string{"script"}, nil); len(errs) > 0 {
+	if errs := cl.app.Dao().ExpandRecord(kr, []string{"project"}, nil); len(errs) > 0 {
 		return cl.drop("failed to expand record", slog.Any("errors", errs), slog.String("record", kr.GetId()))
 	}
 
-	sr := kr.ExpandedOne("script")
-	if sr == nil {
-		return cl.drop("failed to get script from key", slog.String("record", kr.GetId()))
+	pr := kr.ExpandedOne("project")
+	if pr == nil {
+		return cl.drop("failed to get project from key", slog.String("record", kr.GetId()))
 	}
 
-	bp, err := base64.StdEncoding.DecodeString(sr.GetString("point"))
+	bp, err := base64.StdEncoding.DecodeString(pr.GetString("point"))
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
 
-	st, err := base64.StdEncoding.DecodeString(sr.GetString("salt"))
+	st, err := base64.StdEncoding.DecodeString(pr.GetString("salt"))
 	if err != nil {
 		return tracerr.Wrap(err)
 	}

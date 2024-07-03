@@ -63,6 +63,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 
 	sh.keyId = br.KeyId
 	cl.currentStage = ClientStageHandshake
+	cl.bootStageHandler = &sh
 	cl.stageHandler = handshakeHandler{hmacKey: [32]byte{}, aesKey: [32]byte{}, bsh: sh}
 	cl.msgs <- Message{Id: PacketIdBootstrap, Data: BootResponse{
 		BaseTimestamp: cl.timestamp,
