@@ -108,6 +108,10 @@ type reportHandler struct {
 
 // Process function check data
 func processFunctionCheckData(fd *functionData, lfcd []FunctionCheckData) error {
+	if len(lfcd) < CheckFunctionWrappedError {
+		return tracerr.New("function check data length is too short")
+	}
+
 	for idx := 0; idx < len(lfcd); idx++ {
 		fcd := lfcd[idx]
 
@@ -241,7 +245,7 @@ func processFunctionCheckData(fd *functionData, lfcd []FunctionCheckData) error 
 			return tracerr.New("bad function xpcall result")
 		}
 
-		if fd.checkLuaStack {
+		if fd.checkLuaCallLimit {
 			if idx == CheckFunctionLuaCallSuccess && fcd.Boolean != nil && !*fcd.Boolean {
 				return tracerr.New("function lua call success")
 			}
@@ -250,9 +254,85 @@ func processFunctionCheckData(fd *functionData, lfcd []FunctionCheckData) error 
 				return tracerr.New("function lua call return")
 			}
 		}
+
+		if idx == CheckFunctionOkValidLevelType && fcd.Boolean != nil && *fcd.Boolean {
+			return tracerr.New("function valid level type")
+		}
+
+		if idx == CheckFunctionOkValidLevel && fcd.Boolean != nil && *fcd.Boolean {
+			return tracerr.New("function valid level")
+		}
+
+		if fd.checkLuaStack {
+			if idx == CheckFunctionStack && fcd.Boolean != nil && *fcd.Boolean {
+				return tracerr.New("function stack")
+			}
+
+			if idx == CheckFunctionStackWithExpectedLevel && fcd.Boolean != nil && *fcd.Boolean {
+				return tracerr.New("function stack expected level")
+			}
+
+			if idx == CheckFunctionStackSize && fcd.Boolean != nil && *fcd.Boolean {
+				return tracerr.New("function stack size")
+			}
+
+			if idx == CheckFunctionStackError && fcd.Boolean != nil && *fcd.Boolean {
+				return tracerr.New("function stack error")
+			}
+		}
+
+		if idx == CheckFunctionIsExecutorClosure && fcd.Boolean != nil && *fcd.Boolean != fd.isExploitClosure {
+			return tracerr.New("function is executor closure")
+		}
+
+		if fd.checkTrapTriggers {
+			if idx == CheckFunctionTrapTable && fcd.Boolean != nil && *fcd.Boolean {
+				return tracerr.New("function trap table triggered")
+			}
+
+			if idx == CheckFunctionTrapTableMetaTable && fcd.Boolean != nil && !*fcd.Boolean {
+				return tracerr.New("function trap table metatable does not exist")
+			}
+
+			if idx == CheckFunctionTrapTableWatermark && fcd.String != nil && *fcd.String != ArmorShieldWatermark {
+				return tracerr.New("function trap table watermark")
+			}
+
+			if idx == CheckFunctionTrapTableClosures && fcd.Boolean != nil && *fcd.Boolean {
+				return tracerr.New("function trap table closures")
+			}
+		}
+
+		if fd.checkCCallLimit {
+			if idx == CheckFunctionWrappedEnvironment && fcd.Boolean != nil && *fcd.Boolean {
+				return tracerr.New("function wrapped environment")
+			}
+
+			if idx == CheckFunctionWrappedClosure && fcd.Boolean != nil && *fcd.Boolean {
+				return tracerr.New("function wrapped closure")
+			}
+
+			if idx == CheckFunctionWrappedLuaClosure && fcd.Boolean != nil && *fcd.Boolean {
+				return tracerr.New("function wrapped lua closure")
+			}
+
+			if idx == CheckFunctionWrappedSetFunction && fcd.Boolean != nil && *fcd.Boolean {
+				return tracerr.New("function wrapped set function")
+			}
+
+			if idx == CheckFunctionWrappedError {
+				if fcd.Boolean != nil && !*fcd.Boolean {
+					return tracerr.New("function wrapped error not boolean")
+				}
+
+				if fcd.String != nil && strings.Contains(*fcd.String, "C stack overflow") {
+					return tracerr.New("function wrapped error")
+				}
+			}
+		}
 	}
 
-	fd.checkLuaStack = false
+	fd.checkLuaCallLimit = false
 
 	return nil
 }
