@@ -41,6 +41,8 @@ func (sh handshakeHandler) marshalMessage(cl *client, v interface{}) ([]byte, er
 		return da, tracerr.Wrap(err)
 	}
 
+	cl.logger.Info("marshal message", slog.Any("len", len(da)))
+
 	iv := make([]byte, aes.BlockSize)
 	_, err = rand.Read(iv)
 	if err != nil {
@@ -58,20 +60,14 @@ func (sh handshakeHandler) marshalMessage(cl *client, v interface{}) ([]byte, er
 	mode := cipher.NewCBCEncrypter(block, iv)
 	mode.CryptBlocks(eb, pb)
 
-	seq := make([]byte, 8)
 	ts := make([]byte, 8)
-
-	binary.LittleEndian.PutUint64(seq, cl.currentSequence+1)
-	binary.LittleEndian.PutUint64(ts, cl.timestamp)
+	binary.LittleEndian.PutUint64(ts, uint64(cl.baseTimestamp.Unix()))
 
 	mac := hmac.New(sha256.New, sh.hmacKey[:])
 	mac.Write(eb)
 	mac.Write([]byte{VersionSWS100})
-	mac.Write(seq)
 	mac.Write(ts)
 	mac.Write(cl.subId[:])
-
-	cl.logger.Info("marshal message", slog.Int("seq", int(cl.currentSequence+1)))
 
 	fin := append(mac.Sum(nil), iv[:]...)
 	fin = append(fin, eb[:]...)
@@ -81,6 +77,8 @@ func (sh handshakeHandler) marshalMessage(cl *client, v interface{}) ([]byte, er
 
 // Unmarshal message
 func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface{}) error {
+	cl.logger.Info("unmarshal message", slog.Any("len", len(data)))
+
 	if len(data) < 48 {
 		return tracerr.New("message too short")
 	}
@@ -97,20 +95,14 @@ func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface
 		return tracerr.New("invalid cipher text")
 	}
 
-	seq := make([]byte, 8)
 	ts := make([]byte, 8)
-
-	binary.LittleEndian.PutUint64(seq, cl.currentSequence)
-	binary.LittleEndian.PutUint64(ts, cl.timestamp)
+	binary.LittleEndian.PutUint64(ts, uint64(cl.baseTimestamp.Unix()))
 
 	mac := hmac.New(sha256.New, sh.hmacKey[:])
 	mac.Write(ct)
 	mac.Write([]byte{VersionSWS100})
-	mac.Write(seq)
 	mac.Write(ts)
 	mac.Write(cl.subId[:])
-
-	cl.logger.Info("unmarshal message", slog.Int("seq", int(cl.currentSequence)))
 
 	if !hmac.Equal(mac.Sum(nil), em) {
 		return tracerr.New("mac signature verification failed")
@@ -139,9 +131,7 @@ func (sh handshakeHandler) sendMessage(cl *client, msg Message) error {
 		return tracerr.Wrap(err)
 	}
 
-	cl.packets <- Packet{Id: msg.Id, Msg: ser}
-
-	return nil
+	return cl.sendPacket(Packet{Id: msg.Id, Msg: ser})
 }
 
 // Handle handshake message
@@ -204,14 +194,15 @@ func (sh handshakeHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	cl.currentStage = ClientStageIdentify
-	cl.stageHandler = identifyHandler{hsh: sh}
+	cl.currentStage = ClientStageEstablishing
 	cl.handshakeStageHandler = &sh
-	cl.heartbeatStageHandler = &heartbeatHandler{hsh: sh}
+
+	cl.stageHandler = establishedStageHandler{hsh: sh}
 	cl.reportStageHandler = &reportHandler{hsh: sh}
-	cl.msgs <- Message{Id: sh.handlePacketId(), Data: HandshakeResponse{
+
+	cl.sendMessage(Message{Id: sh.handlePacketId(), Data: HandshakeResponse{
 		ServerPublicKey: [32]byte(pbk),
-	}}
+	}})
 
 	return nil
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
@@ -8,7 +9,11 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
+	"nhooyr.io/websocket"
 )
+
+// ArmorShield watermark
+const ArmorShieldWatermark = "🛡️🛡️ArmorShield🛡️🛡️"
 
 // Version numbers for the SWS protocol.
 const (
@@ -19,6 +24,8 @@ const (
 const (
 	ClientStageBoot = iota
 	ClientStageHandshake
+	ClientStageEstablishing
+	ClientStageEstablished
 	ClientStageIdentify
 	ClientStageLoad
 )
@@ -39,79 +46,133 @@ type Message struct {
 	Data interface{}
 }
 
+// Function arguments
+type FunctionArgument struct {
+	FunctionString *string
+	String         *string
+	Int            *int
+}
+
+// Function data
+type functionData struct {
+	closureInfoName   string
+	checkCCallLimit   bool
+	checkLuaCallLimit bool
+	checkTrapTriggers bool
+	checkLuaStack     bool
+	isExploitClosure  bool
+	normalArguments   []FunctionArgument
+	errorArguments    []FunctionArgument
+	errorReturnCheck  func(err string) bool
+}
+
 // A client represents a connection to the loader.
 // Packets and messages are queued in a channel to the client from the server.
 // If they're too slow to keep up with the packets or messages, they'll be removed.
 type client struct {
-	app             *pocketbase.PocketBase
-	logger          *slog.Logger
-	heartbeatTicker *time.Ticker
+	ls     *loaderServer
+	app    *pocketbase.PocketBase
+	logger *slog.Logger
 
-	timestamp uint64
-	subId     uuid.UUID
+	heartbeatTicker      *time.Ticker
+	heartbeatCheckTicker *time.Ticker
+	dropTicker           *time.Ticker
+
+	subId         uuid.UUID
+	baseTimestamp time.Time
 
 	handshakeStageHandler *handshakeHandler
-	heartbeatStageHandler *heartbeatHandler
 	reportStageHandler    *reportHandler
 	bootStageHandler      *bootStageHandler
 
 	broadcastStageHandler broadcastHandler
 	stageHandler          stageHandler
 
-	forcedHeartbeat map[byte]bool
-	currentStage    byte
-	currentSequence uint64
+	receivedReports byte
+	sentReports     byte
+
+	currentStage byte
+	closed       bool
 
 	packets      chan Packet
-	msgs         chan Message
 	readerClosed chan struct{}
 
-	getRemoteAddr   func() string
-	broadcastPacket func(ocl *client, pk Packet)
-	fail            func(reason string, err error, args ...any) error
-	drop            func(reason string, args ...any) error
+	getRemoteAddr func() string
+	fail          func(reason string, err error, args ...any) error
+	drop          func(reason string, args ...any) error
+
+	xpcall           *functionData
+	isFunctionHooked *functionData
+	coroutineWrap    *functionData
+	loadString       *functionData
+	debugGetStack    *functionData
 }
 
-// Send heartbeat.
-func (cl *client) sendHeartbeat() error {
-	if cl.currentStage <= ClientStageHandshake {
-		return tracerr.New("invalid heartbeat client stage")
-	}
-
-	if cl.handshakeStageHandler == nil {
-		return tracerr.New("handshake stage handler missing")
-	}
-
-	return cl.handshakeStageHandler.sendMessage(cl, Message{
-		Id:   PacketIdHeartbeat,
-		Data: HeartbeatMessage{},
-	})
-}
-
-// Handle packet.
-func (cl *client) handlePacket(msg []byte) error {
-	var pk Packet
-	err := msgpack.Unmarshal(msg, &pk)
+// Write a packet to the websocket connection.
+func (cl *client) writePacket(ctx context.Context, c *websocket.Conn, pk Packet) error {
+	ser, err := msgpack.Marshal(pk)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
 
-	cl.logger.Info("handling packet", slog.Int("id", int(pk.Id)), slog.Int("seq", int(cl.currentSequence)))
+	cl.logger.Warn("writing packet", slog.Int("id", int(pk.Id)))
+
+	return c.Write(ctx, websocket.MessageBinary, ser)
+}
+
+// This function will close the websocket connection and write a close packet.
+// Ignore any timeout or error by the close.
+// We don't care whether or not they receive a close frame since our client will not respond.
+// We do care however - if the client receives our dropping message.
+func (cl *client) closeConn(ctx context.Context, c *websocket.Conn, status websocket.StatusCode, reason string) error {
+	ser, err := msgpack.Marshal(DropPacket{
+		Reason: reason,
+	})
+
+	if err != nil {
+		return tracerr.Wrap(err)
+	}
+
+	cl.logger.Warn("closing connection", slog.String("reason", reason))
+
+	err = cl.writePacket(ctx, c, Packet{Id: PacketIdDropping, Msg: ser})
+
+	c.Close(status, reason)
+
+	return tracerr.Wrap(err)
+}
+
+// Send a packet without blocking.
+func (cl *client) sendPacket(pk Packet) error {
+	select {
+	case cl.packets <- pk:
+	default:
+		return tracerr.New("client cannot keep up with packets")
+	}
+
+	return nil
+}
+
+// Send a message without blocking.
+func (cl *client) sendMessage(msg Message) error {
+	ser, err := msgpack.Marshal(msg.Data)
+	if err != nil {
+		return tracerr.Wrap(err)
+	}
+
+	return cl.sendPacket(Packet{Id: msg.Id, Msg: ser})
+}
+
+// Handle packet.
+func (cl *client) handlePacket(pk Packet) error {
+	cl.logger.Info("handling packet", slog.Int("id", int(pk.Id)))
 
 	if pk.Id == PacketIdBroadcast {
 		return tracerr.Wrap(cl.broadcastStageHandler.handlePacket(cl, pk))
 	}
 
-	if pk.Id == PacketIdHeartbeat && cl.heartbeatStageHandler != nil {
-		return tracerr.Wrap(cl.heartbeatStageHandler.handlePacket(cl, pk))
-	}
-
 	if pk.Id == PacketIdReport && cl.reportStageHandler != nil {
 		return tracerr.Wrap(cl.reportStageHandler.handlePacket(cl, pk))
-	}
-
-	if cl.currentStage >= ClientStageIdentify && !cl.forcedHeartbeat[cl.currentStage] {
-		return cl.drop("missed forced heartbeat", slog.Int("stage", int(cl.currentStage)))
 	}
 
 	if pk.Id != cl.stageHandler.handlePacketId() {

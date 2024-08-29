@@ -3,8 +3,10 @@ package main
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"log/slog"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/models"
 	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
@@ -16,19 +18,18 @@ import (
 // Instead, a hashed identifier will include all of these data points.
 // This will be later matched to check if it's blacklisted or not.
 // We need as many identifiers as we can get to prevent false positives.
+
 // Some of these identifiers will be saved will be used to check for change in identifiers.
+// Save output devices / input device names?
+
 type AnalyticsInfo struct {
-	ClientId            string
-	BrowserTrackerId    string
 	SystemLocaleId      string
 	OutputDevices       []string
 	InputDevices        []string
-	CameraDevices       []string
 	HasHyperion         bool
 	HasTouchscreen      bool
 	HasGyroscope        bool
-	CpuFrequency        float64
-	DisplayResolution   [2]int
+	GpuMemory           int64
 	Timezone            string
 	Region              string
 	DaylightSavingsTime bool
@@ -37,10 +38,8 @@ type AnalyticsInfo struct {
 // Fingerprint information - small list of reliable identifiers.
 // This is used for doing the main blacklist or hardware change checks.
 type FingerprintInfo struct {
-	DeviceId    string
 	DeviceType  byte
 	ExploitHwid string
-	ExploitName string
 }
 
 // Session information - this is useful for determining past accounts and past sessions.
@@ -49,12 +48,21 @@ type FingerprintInfo struct {
 // 2. The user has not restarted their client.
 // 3. The user has not restarted their computer.
 // Through this information - and one of these things are true, we can blacklist a user with reasonable suspicion.
-// The workspace directory is saved here for manual look - maybe there's something in this specific directory that we can look for.
 type SessionInfo struct {
 	CpuStart        float64
 	PlaySessionId   string
 	RobloxSessionId string
-	WorkspaceScan   []string
+	RobloxClientId  string
+
+	// The workspace directory is saved here for manual look - maybe there's something in this specific directory that we can look for.
+	// Every file name and folder name is logged.
+
+	WorkspaceScan []string
+
+	// The current log history is saved here for manual look - maybe there's output we can look for aswell.
+	// Every log entry is logged.
+
+	LogHistory []string
 }
 
 // Join information - this is useful for buyer analysis, investigation, and account information.
@@ -74,6 +82,7 @@ type JoinInfo struct {
 // Getting as much roblox-reliant information is good so there's more to replicate or spoof.
 // It's also good analytical data to see the channels and versions our users are using - new executor / rollback method.
 // This isn't really used for anything else apart from to be looked at later - maybe verify that we're on the latest version(s).
+// Oh yeah, maybe some users that we want to track are on a certain version.
 type VersionInfo struct {
 	RobloxClientChannel string
 	RobloxClientGitHash string
@@ -92,6 +101,9 @@ type SubInfo struct {
 
 // Key information - specific to a key.
 // These are linked and saved to a specific key.
+
+// TODO: Save history of this information
+
 type KeyInfo struct {
 	AnalyticsInfo   AnalyticsInfo
 	FingerprintInfo FingerprintInfo
@@ -103,13 +115,68 @@ type IdentifyMessage struct {
 	SubInfo SubInfo
 }
 
+// The identify response is information sent from the server to send the client their role
+type IdentifyResponse struct {
+	CurrentRole string
+}
+
 // Identify handler
 type identifyHandler struct {
 	hsh handshakeHandler
 }
 
+// Get workspace scan match percentage
+func getWorkspaceScanMatchPercentage(ws []string, ows []string) float64 {
+	hits := 0
+
+	for _, path := range ws {
+		for _, op := range ows {
+			if path != op {
+				continue
+			}
+
+			hits += 1
+		}
+	}
+
+	if len(ws) == 0 || hits == 0 {
+		return 0.0
+	}
+
+	return float64(hits) / float64(len(ws))
+}
+
+// Check BOLO sessions
+func checkBoloSessions(cl *client, si *SessionInfo, bolo_sessions []*models.Record) {
+	for _, bolo_session := range bolo_sessions {
+		var swp float64
+		var ws []string
+
+		if json.Unmarshal([]byte(bolo_session.GetString("workspaceScan")), &ws) != nil {
+			swp = getWorkspaceScanMatchPercentage(ws, si.WorkspaceScan)
+		} else {
+			swp = 0.0
+		}
+
+		sw := swp >= 33.0
+		sm := bolo_session.GetString("robloxSessionId") == si.RobloxSessionId || bolo_session.GetString("playSessionId") == si.PlaySessionId || bolo_session.GetFloat("cpuStart") == si.CpuStart
+
+		if sm {
+			cl.logger.Info("user session is matching with BOLO user", slog.Any("session", bolo_session.GetId()))
+		}
+
+		if sw {
+			cl.logger.Info("user workspace is matching with BOLO user", slog.Any("percentage", sw), slog.Any("session", bolo_session.GetId()))
+		}
+
+		if sm || sw {
+			break
+		}
+	}
+}
+
 // Expect identifiers
-func expectIdentifiers(cl *client, im *IdentifyMessage, kr *models.Record) (*models.Record, *models.Record, *models.Record, *models.Record, error) {
+func expectIdentifiers(cl *client, en string, im *IdentifyMessage, kr *models.Record) (*models.Record, *models.Record, *models.Record, *models.Record, error) {
 	ai := im.KeyInfo.AnalyticsInfo
 	aid, err := ai.hash()
 	if err != nil {
@@ -140,9 +207,8 @@ func expectIdentifiers(cl *client, im *IdentifyMessage, kr *models.Record) (*mod
 	fi := im.KeyInfo.FingerprintInfo
 	fr, err := expectKeyedRecord(cl, kr, "fingerprints", map[string]any{
 		"deviceType":  fi.DeviceType,
-		"deviceId":    fi.DeviceId,
 		"exploitHwid": fi.ExploitHwid,
-		"exploitName": fi.ExploitName,
+		"exploitName": en,
 		"ipAddress":   cl.getRemoteAddr(),
 		"key":         kr.Id,
 	})
@@ -156,7 +222,9 @@ func expectIdentifiers(cl *client, im *IdentifyMessage, kr *models.Record) (*mod
 		"cpuStart":        si.CpuStart,
 		"playSessionId":   si.PlaySessionId,
 		"robloxSessionId": si.RobloxSessionId,
+		"robloxClientId":  si.RobloxClientId,
 		"workspaceScan":   si.WorkspaceScan,
+		"logHistory":      si.LogHistory,
 		"subscription":    sbr.Id,
 	})
 
@@ -203,30 +271,89 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 		return cl.drop("bad environment", slog.String("version", im.SubInfo.VersionInfo.LuaVersion))
 	}
 
+	en := "N/A"
+
+	if cl.bootStageHandler != nil {
+		en = cl.bootStageHandler.exploitName
+	}
+
 	kr, err := cl.app.Dao().FindRecordById("keys", sh.hsh.bsh.keyId)
 	if err != nil {
 		return cl.fail("failed to get key data", err)
 	}
 
-	ar, fr, sr, jr, err := expectIdentifiers(cl, &im, kr)
+	ar, fr, sr, jr, err := expectIdentifiers(cl, en, &im, kr)
 	if err != nil {
 		return cl.fail("expected identifiers from key", err, slog.Any("records", []*models.Record{ar, fr, sr, jr}))
 	}
 
-	if err := checkBlacklist(cl, &im.KeyInfo.FingerprintInfo, &im.SubInfo.SessionInfo); err != nil {
-		return sh.hsh.bsh.blacklistKey(cl, "active blacklist", slog.String("error", err.Error()))
+	if err := checkBlacklist(cl, &im.KeyInfo.FingerprintInfo); err != nil {
+		return sh.hsh.bsh.blacklistKey(cl, "fingerprint has blacklisted key(s) connected", slog.String("error", err.Error()))
 	}
 
-	if err := checkMismatch(&im.KeyInfo.FingerprintInfo, fr, ar, &im.KeyInfo.AnalyticsInfo); err != nil {
+	cl.logger.Info("current analytics information", slog.Any("analyticsInfo", im.KeyInfo.AnalyticsInfo))
+
+	if err := checkMismatch(en, &im.KeyInfo.FingerprintInfo, fr, ar, &im.KeyInfo.AnalyticsInfo); err != nil {
 		return cl.drop("information mismatch", slog.String("error", err.Error()))
 	}
 
-	if err := checkAssosiation(&im.SubInfo.JoinInfo); err != nil && !jr.GetBool("cleared") {
-		return cl.drop("suspicious activity", slog.String("error", err.Error()))
+	if err := checkAssosiation(&im.SubInfo.JoinInfo); err != nil && !kr.GetBool("cleared") {
+		return cl.drop("waiting for account to be cleared", slog.String("error", err.Error()))
 	}
 
-	cl.currentStage = ClientStageLoad
+	// @todo: BOLO:
+	// check if IP is using a VPN / Proxy / Mobile connection (make it so managers can clear this)
+
+	// @todo:
+	// do webhooks.
+
+	bolo_ip, err := cl.app.Dao().FindFirstRecordByFilter(
+		"fingerprint",
+		"key.bolo != false && (ipAddress = {:ipAddress})",
+		dbx.Params{"ipAddress": cl.getRemoteAddr()},
+	)
+
+	if bolo_ip != nil && err == nil {
+		cl.logger.Info("user IP is matching with BOLO user", slog.Any("fingerprint", bolo_ip.GetId()))
+	}
+
+	si := &im.SubInfo.SessionInfo
+
+	bolo_session, err := cl.app.Dao().FindFirstRecordByFilter(
+		"sessions",
+		"subscription.key.bolo != false && (cpuStart = {:cpuStart} || playSessionId = {:playSessionId} || robloxSessionId = {:robloxSessionId})",
+		dbx.Params{"robloxSessionId": si.RobloxSessionId, "playSessionId": si.PlaySessionId, "cpuStart": si.CpuStart},
+	)
+
+	if bolo_session != nil && err == nil {
+		cl.logger.Info("user session is matching with BOLO user", slog.Any("session", bolo_session.GetId()))
+	}
+
+	bolo_join, err := cl.app.Dao().FindFirstRecordByFilter(
+		"joins",
+		"subscription.key.bolo != false && userId = {:userId}",
+		dbx.Params{"userId": im.SubInfo.JoinInfo.UserId},
+	)
+
+	if bolo_join != nil && err == nil {
+		cl.logger.Info("user join is matching with BOLO user", slog.Any("join", bolo_join.GetId()))
+	}
+
+	bolo_sessions, err := cl.app.Dao().FindRecordsByFilter(
+		"sessions",
+		"subscription.key.bolo != false",
+		"", 0, 0, dbx.Params{},
+	)
+
+	if err == nil {
+		checkBoloSessions(cl, &im.SubInfo.SessionInfo, bolo_sessions)
+	}
+
+	cl.currentStage = ClientStageIdentify
 	cl.stageHandler = loadStageHandler(sh)
+	sh.hsh.sendMessage(cl, Message{Id: PacketIdIdentify, Data: IdentifyResponse{
+		CurrentRole: kr.GetString("role"),
+	}})
 
 	return nil
 }
@@ -238,5 +365,5 @@ func (sh identifyHandler) handlePacketId() byte {
 
 // Client stage that the handler is for
 func (sh identifyHandler) handleClientStage() byte {
-	return ClientStageIdentify
+	return ClientStageEstablished
 }

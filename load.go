@@ -13,10 +13,9 @@ type LoadMessage struct {
 	GameId uint64
 }
 
-// The load response will give the client the script to load & send the client it's current role
+// The load response will give the client the script to load
 type LoadResponse struct {
-	CurrentRole string
-	Script      string
+	Script string
 }
 
 // Load script handler
@@ -35,6 +34,10 @@ func (sh loadStageHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
+	if cl.receivedReports <= 1 {
+		return sh.hsh.bsh.blacklistKey(cl, "not enough security reports were ran", slog.Int("sentReports", int(cl.receivedReports)), slog.Int("currentStage", int(cl.currentStage)))
+	}
+
 	kr, err := cl.app.Dao().FindRecordById("keys", sh.hsh.bsh.keyId)
 	if err != nil {
 		return cl.fail("failed to get key data", err)
@@ -51,7 +54,7 @@ func (sh loadStageHandler) handlePacket(cl *client, pk Packet) error {
 
 	sr, err := cl.app.Dao().FindFirstRecordByFilter("scripts", "project = {:projectId} && game = {:gameId}", dbx.Params{"projectId": pr.GetId(), "gameId": lm.GameId})
 	if err != nil {
-		return cl.fail("failed to find matching script", err)
+		return cl.fail("failed to find script for game", err)
 	}
 
 	key := sr.BaseFilesPath() + "/" + sr.GetString("file")
@@ -70,10 +73,10 @@ func (sh loadStageHandler) handlePacket(cl *client, pk Packet) error {
 		return err
 	}
 
-	sh.hsh.sendMessage(cl, Message{
-		Id:   pk.Id,
-		Data: LoadResponse{CurrentRole: kr.GetString("role"), Script: b.String()},
-	})
+	cl.currentStage = ClientStageLoad
+	sh.hsh.sendMessage(cl, Message{Id: pk.Id, Data: LoadResponse{
+		Script: b.String(),
+	}})
 
 	return nil
 }
@@ -85,5 +88,5 @@ func (sh loadStageHandler) handlePacketId() byte {
 
 // Client stage that the handler is for
 func (sh loadStageHandler) handleClientStage() byte {
-	return ClientStageLoad
+	return ClientStageIdentify
 }

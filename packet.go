@@ -18,7 +18,7 @@ const (
 	PacketIdBootstrap = iota
 	PacketIdHandshake
 	PacketIdReport
-	PacketIdHeartbeat
+	PacketIdEstablish
 	PacketIdIdentify
 	PacketIdLoad
 	PacketIdDropping

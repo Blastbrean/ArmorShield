@@ -2,26 +2,47 @@ package main
 
 import (
 	"log/slog"
+	"strings"
 
 	"github.com/pocketbase/pocketbase/forms"
 	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
 )
 
-// The boot message is information sent from the server to initiate the client
+// The boot message is information sent from the client to initiate the server
 type BootMessage struct {
-	KeyId string
+	KeyId       string
+	ExploitName string
 }
 
-// The boot message is information sent from the client to initiate the server
+// Client function data
+type ClientFunctionData struct {
+	ClosureInfoName string
+	CheckCCallLimit bool
+	NormalArguments []FunctionArgument
+	ErrorArguments  []FunctionArgument
+}
+
+// Client function datas
+type ClientFunctionDatas struct {
+	XpCall           ClientFunctionData
+	IsFunctionHooked ClientFunctionData
+	CoroutineWrap    ClientFunctionData
+	LoadString       ClientFunctionData
+	DebugGetStack    ClientFunctionData
+}
+
+// The boot response is information sent from the server to initiate the client
 type BootResponse struct {
-	BaseTimestamp uint64
-	SubId         [16]byte
+	BaseTimestamp       uint64
+	SubId               [16]byte
+	ClientFunctionDatas ClientFunctionDatas
 }
 
 // Boot stage handler
 type bootStageHandler struct {
-	keyId string
+	keyId       string
+	exploitName string
 }
 
 // Blacklist key
@@ -40,7 +61,7 @@ func (sh bootStageHandler) blacklistKey(cl *client, reason string, attrs ...any)
 		return err
 	}
 
-	return cl.drop(reason, attrs...)
+	return cl.drop("key got blacklisted", attrs...)
 }
 
 // Handle boot response
@@ -61,14 +82,117 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		return cl.drop("key is blacklisted", slog.String("blacklist", reason))
 	}
 
+	expiry := kr.GetDateTime("expiry")
+	if expiry.Time().Before(cl.baseTimestamp) {
+		return cl.drop("key is expired", slog.String("expiry", expiry.String()), slog.String("baseTimestamp", cl.baseTimestamp.String()))
+	}
+
+	ubt := uint64(cl.baseTimestamp.Unix())
+
+	isz := strings.Contains(br.ExploitName, "Synapse Z")
+	dgs := "debug.getstack"
+
+	if isz {
+		dgs = "debug_getstack"
+	}
+
 	sh.keyId = br.KeyId
+	sh.exploitName = br.ExploitName
+
+	rtn := "return nil"
+	rtam := "return" + " " + "'" + ArmorShieldWatermark + "'"
+	one := 1
+
+	cl.xpcall = &functionData{
+		closureInfoName:   "xpcall",
+		checkTrapTriggers: true,
+		checkCCallLimit:   true,
+		checkLuaCallLimit: true,
+		checkLuaStack:     true,
+		isExploitClosure:  true,
+		normalArguments:   []FunctionArgument{{FunctionString: &rtn}, {FunctionString: &rtn}},
+		errorArguments:    []FunctionArgument{},
+		errorReturnCheck: func(err string) bool {
+			return strings.Contains(err, "missing argument #2")
+		},
+	}
+
+	cl.isFunctionHooked = &functionData{
+		closureInfoName:   "isfunctionhooked",
+		checkTrapTriggers: true,
+		checkCCallLimit:   true,
+		checkLuaCallLimit: true,
+		checkLuaStack:     true,
+		isExploitClosure:  true,
+		normalArguments:   []FunctionArgument{{FunctionString: &rtn}},
+		errorArguments:    []FunctionArgument{},
+		errorReturnCheck: func(err string) bool {
+			return strings.Contains(err, "missing argument #1")
+		},
+	}
+
+	// @note: normal return check is checking for boolean - not function...
+	// function check will be handled on client side
+	cl.coroutineWrap = &functionData{
+		closureInfoName:   "wrap",
+		checkTrapTriggers: true,
+		checkCCallLimit:   true,
+		checkLuaCallLimit: true,
+		checkLuaStack:     true,
+		isExploitClosure:  true,
+		normalArguments:   []FunctionArgument{{FunctionString: &rtn}},
+		errorArguments:    []FunctionArgument{},
+		errorReturnCheck: func(err string) bool {
+			return strings.Contains(err, "missing argument #1")
+		},
+	}
+
+	// @note: normal return check is checking for boolean - not function...
+	// function check will be handled on client side
+	cl.loadString = &functionData{
+		closureInfoName:   "loadstring",
+		checkTrapTriggers: true,
+		checkCCallLimit:   true,
+		checkLuaCallLimit: true,
+		checkLuaStack:     true,
+		isExploitClosure:  true,
+		normalArguments:   []FunctionArgument{{String: &rtam}},
+		errorArguments:    []FunctionArgument{},
+		errorReturnCheck: func(err string) bool {
+			return strings.Contains(err, "missing argument #1")
+		},
+	}
+
+	// @note: normal return check is checking for boolean - not table...
+	// table check will be handled on client side
+	cl.debugGetStack = &functionData{
+		closureInfoName:   dgs,
+		checkTrapTriggers: true,
+		checkCCallLimit:   false,
+		checkLuaCallLimit: true,
+		checkLuaStack:     true,
+		isExploitClosure:  true,
+		normalArguments:   []FunctionArgument{{Int: &one}},
+		errorArguments:    []FunctionArgument{},
+		errorReturnCheck: func(err string) bool {
+			return strings.Contains(err, "missing argument #1")
+		},
+	}
+
 	cl.currentStage = ClientStageHandshake
 	cl.bootStageHandler = &sh
 	cl.stageHandler = handshakeHandler{hmacKey: [32]byte{}, aesKey: [32]byte{}, bsh: sh}
-	cl.msgs <- Message{Id: PacketIdBootstrap, Data: BootResponse{
-		BaseTimestamp: cl.timestamp,
+	cl.sendMessage(Message{Id: PacketIdBootstrap, Data: BootResponse{
+		BaseTimestamp: ubt,
 		SubId:         cl.subId,
-	}}
+		ClientFunctionDatas: ClientFunctionDatas{
+			XpCall:           ClientFunctionData{ClosureInfoName: cl.xpcall.closureInfoName, NormalArguments: cl.xpcall.normalArguments, ErrorArguments: cl.xpcall.errorArguments, CheckCCallLimit: cl.xpcall.checkCCallLimit},
+			IsFunctionHooked: ClientFunctionData{ClosureInfoName: cl.isFunctionHooked.closureInfoName, NormalArguments: cl.isFunctionHooked.normalArguments, ErrorArguments: cl.isFunctionHooked.errorArguments, CheckCCallLimit: cl.isFunctionHooked.checkCCallLimit},
+			CoroutineWrap:    ClientFunctionData{ClosureInfoName: cl.coroutineWrap.closureInfoName, NormalArguments: cl.coroutineWrap.normalArguments, ErrorArguments: cl.coroutineWrap.errorArguments, CheckCCallLimit: cl.coroutineWrap.checkCCallLimit},
+			LoadString:       ClientFunctionData{ClosureInfoName: cl.loadString.closureInfoName, NormalArguments: cl.loadString.normalArguments, ErrorArguments: cl.loadString.errorArguments, CheckCCallLimit: cl.loadString.checkCCallLimit},
+			DebugGetStack:    ClientFunctionData{ClosureInfoName: cl.debugGetStack.closureInfoName, NormalArguments: cl.debugGetStack.normalArguments, ErrorArguments: cl.debugGetStack.errorArguments, CheckCCallLimit: cl.debugGetStack.checkCCallLimit},
+		},
+	}})
 
 	return nil
 }

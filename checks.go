@@ -7,36 +7,26 @@ import (
 )
 
 func checkAssosiation(ji *JoinInfo) error {
-	if usm := NewUniverse(ji.UserGroups).SliceMatches([]uint64{}); len(usm) > 0 {
+	if usm := NewUniverse(ji.UserGroups).SliceMatches([]uint64{15326583, 33987101, 33987290, 33423445}); len(usm) > 0 {
 		return tracerr.New("group assosiation")
 	}
 
-	if usm := NewUniverse(ji.UserFollowing).SliceMatches([]uint64{}); len(usm) > 0 {
+	if usm := NewUniverse(ji.UserFollowing).SliceMatches([]uint64{112508646, 3657821880, 141656968, 4379286741, 972539685, 2046352519}); len(usm) > 0 {
 		return tracerr.New("following assosiation")
 	}
 
-	if usm := NewUniverse(ji.UserFriends).SliceMatches([]uint64{}); len(usm) > 0 {
+	if usm := NewUniverse(ji.UserFriends).SliceMatches([]uint64{112508646, 3657821880, 141656968, 4379286741, 972539685, 2046352519}); len(usm) > 0 {
 		return tracerr.New("friends assosiation")
 	}
 
 	return nil
 }
 
-func checkBlacklist(cl *client, fi *FingerprintInfo, si *SessionInfo) error {
-	blsr, err := cl.app.Dao().FindFirstRecordByFilter(
-		"sessions",
-		"subscription.key.blacklist != null && (cpuStart = {:cpuStart} || playSessionId = {:playSessionId} || robloxSessionId = {:robloxSessionId})",
-		dbx.Params{"robloxSessionId": si.RobloxSessionId, "playSessionId": si.PlaySessionId, "cpuStart": si.CpuStart},
-	)
-
-	if blsr != nil && err == nil {
-		return tracerr.New("session blacklist")
-	}
-
+func checkBlacklist(cl *client, fi *FingerprintInfo) error {
 	blfr, err := cl.app.Dao().FindFirstRecordByFilter(
 		"fingerprint",
-		"key.blacklist != null && (exploitHwid = {:exploitHwid} || deviceId = {:deviceId})",
-		dbx.Params{"exploitHwid": fi.ExploitHwid, "deviceId": fi.DeviceId},
+		"key.blacklist != null && (exploitHwid = {:exploitHwid})",
+		dbx.Params{"exploitHwid": fi.ExploitHwid},
 	)
 
 	if blfr != nil && err == nil {
@@ -49,23 +39,19 @@ func checkBlacklist(cl *client, fi *FingerprintInfo, si *SessionInfo) error {
 		"", 2, 0, dbx.Params{"ipAddress": cl.getRemoteAddr()},
 	)
 
-	if len(blips) >= 2 && err == nil {
+	if len(blips) >= 3 && err == nil {
 		return tracerr.New("ip blacklist")
 	}
 
 	return nil
 }
 
-func checkMismatch(fi *FingerprintInfo, fr *models.Record, ar *models.Record, ai *AnalyticsInfo) error {
-	if fr.GetString("deviceId") != fi.DeviceId {
-		return tracerr.New("device id mismatch")
-	}
-
+func checkMismatch(en string, fi *FingerprintInfo, fr *models.Record, ar *models.Record, ai *AnalyticsInfo) error {
 	if fr.GetString("exploitHwid") != fi.ExploitHwid {
 		return tracerr.New("hwid mismatch")
 	}
 
-	if fr.GetString("exploitName") != fi.ExploitName {
+	if fr.GetString("exploitName") != en {
 		return tracerr.New("exploit mismatch")
 	}
 
