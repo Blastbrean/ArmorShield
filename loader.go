@@ -201,8 +201,6 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 		reportStageHandler:    nil,
 		handshakeStageHandler: nil,
 		bootStageHandler:      nil,
-
-		broadcastStageHandler: broadcastHandler{},
 		stageHandler:          bootStageHandler{keyId: ""},
 
 		currentStage: ClientStageBoot,

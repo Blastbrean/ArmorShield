@@ -11,9 +11,7 @@ import (
 // Report checks
 const (
 	CheckFunctionHook = iota
-	CheckDummyFunctionHookReturn
 	CheckDummyFunctionHook
-	CheckDummyFunctionRestoreReturn
 	CheckDummyFunctionRestoreHook
 	CheckFunctionDebugGetInfo
 	CheckFunctionDebugInfo
@@ -31,22 +29,17 @@ const (
 	CheckFunctionXPCallError
 	CheckFunctionLuaCallSuccess
 	CheckFunctionLuaCallResult
-	CheckFunctionOkValidLevelType
-	CheckFunctionOkValidLevel
-	CheckFunctionStack
-	CheckFunctionStackWithExpectedLevel
-	CheckFunctionStackSize
-	CheckFunctionStackError
 	CheckFunctionIsExecutorClosure
 	CheckFunctionTrapTable
 	CheckFunctionTrapTableMetaTable
 	CheckFunctionTrapTableWatermark
-	CheckFunctionTrapTableClosures
+	CheckFunctionTrapTableMismatch
 	CheckFunctionWrappedEnvironment
-	CheckFunctionWrappedClosure
+	CheckFunctionWrappedExecutorClosure
 	CheckFunctionWrappedLuaClosure
-	CheckFunctionWrappedSetFunction
+	CheckFunctionWrappedSetEnvironment
 	CheckFunctionWrappedError
+	CheckFunctionRestore
 )
 
 // Report data types
@@ -107,28 +100,52 @@ type reportHandler struct {
 }
 
 // Process function check data
-func processFunctionCheckData(fd *functionData, lfcd []FunctionCheckData) error {
-	if len(lfcd) < CheckFunctionWrappedError {
-		return tracerr.New("function check data length is too short")
+func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, lfcd []FunctionCheckData) error {
+	if len(lfcd) != (CheckFunctionRestore + 1) {
+		return tracerr.New("function check data length mismatch")
 	}
+
+	prp := map[int]interface{}{}
 
 	for idx := 0; idx < len(lfcd); idx++ {
 		fcd := lfcd[idx]
+		val := any(nil)
 
-		if idx == CheckFunctionHook && fcd.Boolean != nil && !*fcd.Boolean {
-			return tracerr.New("function is hooked")
+		if fcd.String != nil {
+			val = *fcd.String
 		}
 
-		if idx == CheckDummyFunctionHookReturn && fcd.String != nil && *fcd.String != ArmorShieldWatermark+"\000" {
-			return tracerr.New("hooked dummy has unexpected return")
+		if fcd.Boolean != nil {
+			val = *fcd.Boolean
+		}
+
+		if fcd.Byte != nil {
+			val = *fcd.Byte
+		}
+
+		if fcd.GetInfo != nil {
+			val = *fcd.GetInfo
+		}
+
+		if fcd.Info != nil {
+			val = *fcd.Info
+		}
+
+		prp[idx] = val
+	}
+
+	cl.logger.Warn("processing function check data", slog.Any("data", prp))
+
+	for idx := 0; idx < len(lfcd); idx++ {
+		fcd := lfcd[idx]
+		isz := strings.Contains(sh.hsh.bsh.exploitName, "Synapse Z")
+
+		if idx == CheckFunctionHook && fcd.Boolean != nil && *fcd.Boolean {
+			return tracerr.New("function is hooked")
 		}
 
 		if idx == CheckDummyFunctionHook && fcd.Boolean != nil && !*fcd.Boolean {
 			return tracerr.New("hooked dummy is unexpectedly not hooked")
-		}
-
-		if idx == CheckDummyFunctionRestoreReturn && fcd.String != nil && *fcd.String != ArmorShieldWatermark {
-			return tracerr.New("restored dummy has unexpected return")
 		}
 
 		if idx == CheckDummyFunctionRestoreHook && fcd.Boolean != nil && *fcd.Boolean {
@@ -161,7 +178,7 @@ func processFunctionCheckData(fd *functionData, lfcd []FunctionCheckData) error 
 			}
 
 			if fcd.GetInfo.Name != fd.closureInfoName {
-				return tracerr.Errorf("function name %s does not match closure info name", fcd.GetInfo.Name)
+				return tracerr.Errorf("function name '%s' does not match closure info name", fcd.GetInfo.Name)
 			}
 		}
 
@@ -182,8 +199,12 @@ func processFunctionCheckData(fd *functionData, lfcd []FunctionCheckData) error 
 				return tracerr.New("function parameter count is not true")
 			}
 
+			if len(fcd.Info.FuncName) > 20 {
+				return tracerr.New("function name length is of invalid length")
+			}
+
 			if fcd.Info.FuncName != fd.closureInfoName {
-				return tracerr.Errorf("function name %s does not match closure info name", fcd.Info.FuncName)
+				return tracerr.Errorf("function name '%s' does not match closure info name", fcd.Info.FuncName)
 			}
 		}
 
@@ -195,7 +216,7 @@ func processFunctionCheckData(fd *functionData, lfcd []FunctionCheckData) error 
 				return tracerr.New("unexpected function upvalues")
 			}
 
-			if !*fcd.Boolean && fur.String != nil && !strings.Contains(*fur.String, "Lua function expected") {
+			if !*fcd.Boolean && fur.String != nil && !strings.Contains(*fur.String, "Lua function expected") && !strings.Contains(*fur.String, "invalid argument #1") {
 				return tracerr.New("unexpected function upvalues error")
 			}
 		}
@@ -212,11 +233,11 @@ func processFunctionCheckData(fd *functionData, lfcd []FunctionCheckData) error 
 			return tracerr.New("function has environment")
 		}
 
-		if idx == CheckFunctionLuaClosure && fcd.Boolean != nil && *fcd.Boolean {
+		if idx == CheckFunctionLuaClosure && fcd.Boolean != nil && *fcd.Boolean != fd.isLuaClosure {
 			return tracerr.New("function is a lua closure")
 		}
 
-		if idx == CheckFunctionCClosure && fcd.Boolean != nil && !*fcd.Boolean {
+		if idx == CheckFunctionCClosure && fcd.Boolean != nil && *fcd.Boolean == fd.isLuaClosure {
 			return tracerr.New("function is not a c closure")
 		}
 
@@ -236,48 +257,22 @@ func processFunctionCheckData(fd *functionData, lfcd []FunctionCheckData) error 
 			re := regexp.MustCompile(`:(\d+):`)
 			matches := re.FindStringSubmatch(*fcd.String)
 
-			if len(matches) >= 1 || fd.errorReturnCheck(*fcd.String) {
+			if len(matches) >= 1 || !fd.errorReturnCheck(*fcd.String) {
 				return tracerr.New("bad function pcall result")
 			}
 		}
 
-		if idx == CheckFunctionXPCallError && fcd.String != nil && fd.errorReturnCheck(*fcd.String) {
+		if idx == CheckFunctionXPCallError && fcd.String != nil && !fd.errorReturnCheck(*fcd.String) {
 			return tracerr.New("bad function xpcall result")
 		}
 
 		if fd.checkLuaCallLimit {
-			if idx == CheckFunctionLuaCallSuccess && fcd.Boolean != nil && !*fcd.Boolean {
+			if idx == CheckFunctionLuaCallSuccess && fcd.Boolean != nil && *fcd.Boolean {
 				return tracerr.New("function lua call success")
 			}
 
 			if idx == CheckFunctionLuaCallResult && fcd.String != nil && strings.Contains(*fcd.String, "stack overflow") {
 				return tracerr.New("function lua call return")
-			}
-		}
-
-		if idx == CheckFunctionOkValidLevelType && fcd.Boolean != nil && *fcd.Boolean {
-			return tracerr.New("function valid level type")
-		}
-
-		if idx == CheckFunctionOkValidLevel && fcd.Boolean != nil && *fcd.Boolean {
-			return tracerr.New("function valid level")
-		}
-
-		if fd.checkLuaStack {
-			if idx == CheckFunctionStack && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function stack")
-			}
-
-			if idx == CheckFunctionStackWithExpectedLevel && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function stack expected level")
-			}
-
-			if idx == CheckFunctionStackSize && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function stack size")
-			}
-
-			if idx == CheckFunctionStackError && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function stack error")
 			}
 		}
 
@@ -298,8 +293,8 @@ func processFunctionCheckData(fd *functionData, lfcd []FunctionCheckData) error 
 				return tracerr.New("function trap table watermark")
 			}
 
-			if idx == CheckFunctionTrapTableClosures && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function trap table closures")
+			if idx == CheckFunctionTrapTableMismatch && fcd.Boolean != nil && *fcd.Boolean {
+				return tracerr.New("function trap table mismatch")
 			}
 		}
 
@@ -308,26 +303,32 @@ func processFunctionCheckData(fd *functionData, lfcd []FunctionCheckData) error 
 				return tracerr.New("function wrapped environment")
 			}
 
-			if idx == CheckFunctionWrappedClosure && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function wrapped closure")
+			if idx == CheckFunctionWrappedEnvironment && fcd.Boolean != nil && *fcd.Boolean {
+				return tracerr.New("function wrapped executor closure")
 			}
 
 			if idx == CheckFunctionWrappedLuaClosure && fcd.Boolean != nil && *fcd.Boolean {
 				return tracerr.New("function wrapped lua closure")
 			}
 
-			if idx == CheckFunctionWrappedSetFunction && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function wrapped set function")
+			if idx == CheckFunctionWrappedSetEnvironment && fcd.Boolean != nil && *fcd.Boolean {
+				return tracerr.New("function wrapped set environment")
 			}
 
 			if idx == CheckFunctionWrappedError {
 				if fcd.Boolean != nil && !*fcd.Boolean {
-					return tracerr.New("function wrapped error not boolean")
+					return tracerr.New("function wrapped error failure")
 				}
 
 				if fcd.String != nil && strings.Contains(*fcd.String, "C stack overflow") {
 					return tracerr.New("function wrapped error")
 				}
+			}
+		}
+
+		if isz && idx == CheckFunctionRestore {
+			if fcd.String == nil || !strings.Contains(*fcd.String, "function is not hooked") {
+				return tracerr.New("function restore has no not hooked error")
 			}
 		}
 	}
@@ -346,7 +347,7 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 	}
 
 	cl.receivedReports += 1
-	cl.logger.Warn("processing report", slog.Any("reportMessage", br))
+	cl.logger.Warn("processing report")
 
 	bsh := sh.hsh.bsh
 
@@ -378,24 +379,24 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 		return bsh.blacklistKey(cl, "string metatable table index mismatch", slog.Any("stringMetatableTableIndexMatch", br.StringMetatableTableIndexMatch))
 	}
 
-	if err := processFunctionCheckData(cl.xpcall, br.FunctionDatas.XpCall); err != nil {
-		return bsh.blacklistKey(cl, "error processing xpcall function check data", slog.Any("xpcall", br.FunctionDatas.XpCall), slog.Any("error", err))
+	if err := sh.processFunctionCheckData(cl, cl.xpcall, br.FunctionDatas.XpCall); err != nil {
+		return bsh.blacklistKey(cl, "error processing xpcall function check data", slog.Any("xpcall", len(br.FunctionDatas.XpCall)), slog.Any("error", err))
 	}
 
-	if err := processFunctionCheckData(cl.isFunctionHooked, br.FunctionDatas.IsFunctionHooked); err != nil {
-		return bsh.blacklistKey(cl, "error processing isFunctionHooked function check data", slog.Any("isFunctionHooked", br.FunctionDatas.IsFunctionHooked), slog.Any("error", err))
+	if err := sh.processFunctionCheckData(cl, cl.isFunctionHooked, br.FunctionDatas.IsFunctionHooked); err != nil {
+		return bsh.blacklistKey(cl, "error processing isFunctionHooked function check data", slog.Any("isFunctionHooked", len(br.FunctionDatas.IsFunctionHooked)), slog.Any("error", err))
 	}
 
-	if err := processFunctionCheckData(cl.coroutineWrap, br.FunctionDatas.CoroutineWrap); err != nil {
-		return bsh.blacklistKey(cl, "error processing coroutineWrap function check data", slog.Any("coroutineWrap", br.FunctionDatas.CoroutineWrap), slog.Any("error", err))
+	if err := sh.processFunctionCheckData(cl, cl.coroutineWrap, br.FunctionDatas.CoroutineWrap); err != nil {
+		return bsh.blacklistKey(cl, "error processing coroutineWrap function check data", slog.Any("coroutineWrap", len(br.FunctionDatas.CoroutineWrap)), slog.Any("error", err))
 	}
 
-	if err := processFunctionCheckData(cl.loadString, br.FunctionDatas.LoadString); err != nil {
-		return bsh.blacklistKey(cl, "error processing loadString function check data", slog.Any("loadString", br.FunctionDatas.LoadString), slog.Any("error", err))
+	if err := sh.processFunctionCheckData(cl, cl.loadString, br.FunctionDatas.LoadString); err != nil {
+		return bsh.blacklistKey(cl, "error processing loadString function check data", slog.Any("loadString", len(br.FunctionDatas.LoadString)), slog.Any("error", err))
 	}
 
-	if err := processFunctionCheckData(cl.debugGetStack, br.FunctionDatas.DebugGetStack); err != nil {
-		return bsh.blacklistKey(cl, "error processing debugGetStack function check data", slog.Any("debugGetStack", br.FunctionDatas.DebugGetStack), slog.Any("error", err))
+	if err := sh.processFunctionCheckData(cl, cl.debugGetStack, br.FunctionDatas.DebugGetStack); err != nil {
+		return bsh.blacklistKey(cl, "error processing debugGetStack function check data", slog.Any("debugGetStack", len(br.FunctionDatas.DebugGetStack)), slog.Any("error", err))
 	}
 
 	return nil

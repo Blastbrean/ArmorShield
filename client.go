@@ -13,7 +13,7 @@ import (
 )
 
 // ArmorShield watermark
-const ArmorShieldWatermark = "🛡️🛡️ArmorShield🛡️🛡️"
+const ArmorShieldWatermark = "🛡️🛡️🛡️ArmorShield🛡️🛡️🛡️"
 
 // Version numbers for the SWS protocol.
 const (
@@ -61,6 +61,7 @@ type functionData struct {
 	checkTrapTriggers bool
 	checkLuaStack     bool
 	isExploitClosure  bool
+	isLuaClosure      bool
 	normalArguments   []FunctionArgument
 	errorArguments    []FunctionArgument
 	errorReturnCheck  func(err string) bool
@@ -84,8 +85,6 @@ type client struct {
 	handshakeStageHandler *handshakeHandler
 	reportStageHandler    *reportHandler
 	bootStageHandler      *bootStageHandler
-
-	broadcastStageHandler broadcastHandler
 	stageHandler          stageHandler
 
 	receivedReports byte
@@ -166,10 +165,6 @@ func (cl *client) sendMessage(msg Message) error {
 // Handle packet.
 func (cl *client) handlePacket(pk Packet) error {
 	cl.logger.Info("handling packet", slog.Int("id", int(pk.Id)))
-
-	if pk.Id == PacketIdBroadcast {
-		return tracerr.Wrap(cl.broadcastStageHandler.handlePacket(cl, pk))
-	}
 
 	if pk.Id == PacketIdReport && cl.reportStageHandler != nil {
 		return tracerr.Wrap(cl.reportStageHandler.handlePacket(cl, pk))

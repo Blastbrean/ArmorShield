@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/pocketbase/pocketbase/forms"
+	"github.com/pocketbase/pocketbase/tools/types"
 	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
 )
@@ -77,20 +78,37 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		return cl.fail("key not found", err)
 	}
 
+	discordId := kr.GetString("discord_id")
+	if len(discordId) <= 0 {
+		return sh.blacklistKey(cl, "ran script without a linked discord id - please contact support")
+	}
+
 	reason := kr.GetString("blacklist")
 	if len(reason) > 0 {
 		return cl.drop("key is blacklisted", slog.String("blacklist", reason))
 	}
 
-	expiry := kr.GetDateTime("expiry")
-	if expiry.Time().Before(cl.baseTimestamp) {
+	expiry, err := types.ParseDateTime(kr.Get("expiry"))
+
+	if err != nil && expiry.Time().Before(cl.baseTimestamp) {
 		return cl.drop("key is expired", slog.String("expiry", expiry.String()), slog.String("baseTimestamp", cl.baseTimestamp.String()))
 	}
 
 	ubt := uint64(cl.baseTimestamp.Unix())
 
 	isz := strings.Contains(br.ExploitName, "Synapse Z")
-	dgs := "debug.getstack"
+
+	dgs := ""
+	ifh := ""
+	ls := ""
+
+	if isz {
+		ls = "loadstring"
+	}
+
+	if isz {
+		ifh = "isfunctionhooked"
+	}
 
 	if isz {
 		dgs = "debug_getstack"
@@ -109,7 +127,8 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		checkCCallLimit:   true,
 		checkLuaCallLimit: true,
 		checkLuaStack:     true,
-		isExploitClosure:  true,
+		isExploitClosure:  false,
+		isLuaClosure:      false,
 		normalArguments:   []FunctionArgument{{FunctionString: &rtn}, {FunctionString: &rtn}},
 		errorArguments:    []FunctionArgument{},
 		errorReturnCheck: func(err string) bool {
@@ -118,12 +137,13 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	}
 
 	cl.isFunctionHooked = &functionData{
-		closureInfoName:   "isfunctionhooked",
+		closureInfoName:   ifh,
 		checkTrapTriggers: true,
 		checkCCallLimit:   true,
 		checkLuaCallLimit: true,
 		checkLuaStack:     true,
 		isExploitClosure:  true,
+		isLuaClosure:      false,
 		normalArguments:   []FunctionArgument{{FunctionString: &rtn}},
 		errorArguments:    []FunctionArgument{},
 		errorReturnCheck: func(err string) bool {
@@ -139,7 +159,8 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		checkCCallLimit:   true,
 		checkLuaCallLimit: true,
 		checkLuaStack:     true,
-		isExploitClosure:  true,
+		isExploitClosure:  false,
+		isLuaClosure:      false,
 		normalArguments:   []FunctionArgument{{FunctionString: &rtn}},
 		errorArguments:    []FunctionArgument{},
 		errorReturnCheck: func(err string) bool {
@@ -150,12 +171,13 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	// @note: normal return check is checking for boolean - not function...
 	// function check will be handled on client side
 	cl.loadString = &functionData{
-		closureInfoName:   "loadstring",
+		closureInfoName:   ls,
 		checkTrapTriggers: true,
 		checkCCallLimit:   true,
 		checkLuaCallLimit: true,
 		checkLuaStack:     true,
 		isExploitClosure:  true,
+		isLuaClosure:      false,
 		normalArguments:   []FunctionArgument{{String: &rtam}},
 		errorArguments:    []FunctionArgument{},
 		errorReturnCheck: func(err string) bool {
@@ -172,6 +194,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		checkLuaCallLimit: true,
 		checkLuaStack:     true,
 		isExploitClosure:  true,
+		isLuaClosure:      false,
 		normalArguments:   []FunctionArgument{{Int: &one}},
 		errorArguments:    []FunctionArgument{},
 		errorReturnCheck: func(err string) bool {

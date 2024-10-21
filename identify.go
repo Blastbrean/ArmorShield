@@ -2,26 +2,16 @@
 package main
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/models"
-	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
-	"golang.org/x/crypto/sha3"
 )
 
 // Analytics information - external identifiers scraping everything they can get.
-// When this is saved to the DB - we won't have all of this data accessible.
-// Instead, a hashed identifier will include all of these data points.
-// This will be later matched to check if it's blacklisted or not.
-// We need as many identifiers as we can get to prevent false positives.
-
-// Some of these identifiers will be saved will be used to check for change in identifiers.
-// Save output devices / input device names?
-
+// Useful for more closely determining who a user is.
 type AnalyticsInfo struct {
 	SystemLocaleId      string
 	OutputDevices       []string
@@ -178,10 +168,7 @@ func checkBoloSessions(cl *client, si *SessionInfo, bolo_sessions []*models.Reco
 // Expect identifiers
 func expectIdentifiers(cl *client, en string, im *IdentifyMessage, kr *models.Record) (*models.Record, *models.Record, *models.Record, *models.Record, error) {
 	ai := im.KeyInfo.AnalyticsInfo
-	aid, err := ai.hash()
-	if err != nil {
-		return nil, nil, nil, nil, tracerr.Wrap(err)
-	}
+	cl.logger.Info("current analytics information", slog.Any("analyticsInfo", ai))
 
 	sbr, err := createNewRecord(cl, "subscriptions", map[string]any{
 		"key": kr.Id,
@@ -193,7 +180,6 @@ func expectIdentifiers(cl *client, en string, im *IdentifyMessage, kr *models.Re
 	}
 
 	ar, err := expectKeyedRecord(cl, kr, "analytics", map[string]any{
-		"aid":    aid,
 		"dst":    ai.DaylightSavingsTime,
 		"region": ai.Region,
 		"locale": ai.SystemLocaleId,
@@ -246,19 +232,6 @@ func expectIdentifiers(cl *client, en string, im *IdentifyMessage, kr *models.Re
 	return ar, fr, sr, jr, nil
 }
 
-// Hash analytics information
-func (ai *AnalyticsInfo) hash() (string, error) {
-	aib, err := msgpack.Marshal(ai)
-	if err != nil {
-		return "", tracerr.Wrap(err)
-	}
-
-	hs := sha3.New512()
-	hs.Write(aib)
-
-	return hex.EncodeToString(hs.Sum(nil)), nil
-}
-
 // Handle identification message
 func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 	var im IdentifyMessage
@@ -303,9 +276,6 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 
 	// @todo: BOLO:
 	// check if IP is using a VPN / Proxy / Mobile connection (make it so managers can clear this)
-
-	// @todo:
-	// do webhooks.
 
 	bolo_ip, err := cl.app.Dao().FindFirstRecordByFilter(
 		"fingerprint",

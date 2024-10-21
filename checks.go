@@ -46,6 +46,7 @@ func checkBlacklist(cl *client, fi *FingerprintInfo) error {
 	return nil
 }
 
+// check for changed device or exploit, new region or locale or dst change. then check for hwid change.
 func checkMismatch(en string, fi *FingerprintInfo, fr *models.Record, ar *models.Record, ai *AnalyticsInfo) error {
 	if fr.GetString("exploitHwid") != fi.ExploitHwid {
 		return tracerr.New("hwid mismatch")
@@ -57,15 +58,6 @@ func checkMismatch(en string, fi *FingerprintInfo, fr *models.Record, ar *models
 
 	if fr.GetInt("deviceType") != int(fi.DeviceType) {
 		return tracerr.New("device type mismatch")
-	}
-
-	aid, err := ai.hash()
-	if err != nil {
-		return tracerr.Wrap(err)
-	}
-
-	if ar.GetString("aid") != aid {
-		return tracerr.New("aid mismatch")
 	}
 
 	if ar.GetString("locale") != ai.SystemLocaleId {

@@ -34,7 +34,7 @@ func (sh loadStageHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	if cl.receivedReports <= 1 {
+	if cl.receivedReports < 1 {
 		return sh.hsh.bsh.blacklistKey(cl, "not enough security reports were ran", slog.Int("sentReports", int(cl.receivedReports)), slog.Int("currentStage", int(cl.currentStage)))
 	}
 
