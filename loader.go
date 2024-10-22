@@ -14,6 +14,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/models"
+	"github.com/realclientip/realclientip-go"
 	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
 	"golang.org/x/sync/errgroup"
@@ -210,7 +211,8 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 		readerClosed: make(chan struct{}),
 
 		getRemoteAddr: func() string {
-			return r.RemoteAddr
+			strat, _ := realclientip.NewRightmostNonPrivateStrategy("X-Forwarded-For")
+			return strat.ClientIP(r.Header, r.RemoteAddr)
 		},
 
 		fail: func(reason string, err error, args ...any) error {
