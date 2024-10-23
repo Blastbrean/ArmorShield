@@ -97,9 +97,7 @@ type client struct {
 
 	xpcall           *functionData
 	isFunctionHooked *functionData
-	coroutineWrap    *functionData
 	loadString       *functionData
-	debugGetStack    *functionData
 }
 
 // Write a packet to the websocket connection.

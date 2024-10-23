@@ -72,9 +72,7 @@ type FunctionCheckData struct {
 type FunctionDatas struct {
 	XpCall           []FunctionCheckData
 	IsFunctionHooked []FunctionCheckData
-	CoroutineWrap    []FunctionCheckData
 	LoadString       []FunctionCheckData
-	DebugGetStack    []FunctionCheckData
 }
 
 // The report request is information sent from the server to initiate a report.
@@ -387,16 +385,8 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 		return bsh.blacklistKey(cl, "error processing isFunctionHooked function check data", slog.Any("isFunctionHooked", len(br.FunctionDatas.IsFunctionHooked)), slog.Any("error", err))
 	}
 
-	if err := sh.processFunctionCheckData(cl, cl.coroutineWrap, br.FunctionDatas.CoroutineWrap); err != nil {
-		return bsh.blacklistKey(cl, "error processing coroutineWrap function check data", slog.Any("coroutineWrap", len(br.FunctionDatas.CoroutineWrap)), slog.Any("error", err))
-	}
-
 	if err := sh.processFunctionCheckData(cl, cl.loadString, br.FunctionDatas.LoadString); err != nil {
 		return bsh.blacklistKey(cl, "error processing loadString function check data", slog.Any("loadString", len(br.FunctionDatas.LoadString)), slog.Any("error", err))
-	}
-
-	if err := sh.processFunctionCheckData(cl, cl.debugGetStack, br.FunctionDatas.DebugGetStack); err != nil {
-		return bsh.blacklistKey(cl, "error processing debugGetStack function check data", slog.Any("debugGetStack", len(br.FunctionDatas.DebugGetStack)), slog.Any("error", err))
 	}
 
 	return nil
