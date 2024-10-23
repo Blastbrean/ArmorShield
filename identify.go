@@ -244,11 +244,11 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 		return cl.drop("bad environment", slog.String("version", im.SubInfo.VersionInfo.LuaVersion))
 	}
 
-	en := "N/A"
-
-	if cl.bootStageHandler != nil {
-		en = cl.bootStageHandler.exploitName
+	if cl.bootStageHandler == nil {
+		return cl.drop("boot stage handler missing")
 	}
+
+	en := cl.bootStageHandler.exploitName
 
 	kr, err := cl.app.Dao().FindRecordById("keys", sh.hsh.bsh.keyId)
 	if err != nil {

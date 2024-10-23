@@ -145,16 +145,22 @@ func (ls *loaderServer) timePump(ctx context.Context, cl *client, _ *websocket.C
 
 		select {
 		case <-cl.dropTicker.C:
+			cl.logger.Warn("checking for drop", slog.Any("stage", cl.currentStage))
+
 			if cl.currentStage != ClientStageLoad {
 				return cl.drop("dropped due to inactivity")
 			}
 
 		case <-cl.heartbeatCheckTicker.C:
+			cl.logger.Warn("checking for heartbeat mismatch", slog.Any("received", cl.receivedReports), slog.Any("sent", cl.sentReports))
+
 			if cl.receivedReports <= cl.sentReports {
 				return cl.drop("heartbeat mismatch", slog.Any("received", cl.receivedReports), slog.Any("sent", cl.sentReports))
 			}
 
 		case <-cl.heartbeatTicker.C:
+			cl.logger.Warn("sending heartbeat", slog.Any("received", cl.receivedReports), slog.Any("sent", cl.sentReports))
+
 			if cl.handshakeStageHandler == nil {
 				return cl.drop("handshake not established before heartbeat")
 			}
