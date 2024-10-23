@@ -168,9 +168,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		ClientFunctionDatas: ClientFunctionDatas{
 			XpCall:           ClientFunctionData{ClosureInfoName: cl.xpcall.closureInfoName, NormalArguments: cl.xpcall.normalArguments, ErrorArguments: cl.xpcall.errorArguments, CheckCCallLimit: cl.xpcall.checkCCallLimit},
 			IsFunctionHooked: ClientFunctionData{ClosureInfoName: cl.isFunctionHooked.closureInfoName, NormalArguments: cl.isFunctionHooked.normalArguments, ErrorArguments: cl.isFunctionHooked.errorArguments, CheckCCallLimit: cl.isFunctionHooked.checkCCallLimit},
-			CoroutineWrap:    ClientFunctionData{ClosureInfoName: cl.coroutineWrap.closureInfoName, NormalArguments: cl.coroutineWrap.normalArguments, ErrorArguments: cl.coroutineWrap.errorArguments, CheckCCallLimit: cl.coroutineWrap.checkCCallLimit},
 			LoadString:       ClientFunctionData{ClosureInfoName: cl.loadString.closureInfoName, NormalArguments: cl.loadString.normalArguments, ErrorArguments: cl.loadString.errorArguments, CheckCCallLimit: cl.loadString.checkCCallLimit},
-			DebugGetStack:    ClientFunctionData{ClosureInfoName: cl.debugGetStack.closureInfoName, NormalArguments: cl.debugGetStack.normalArguments, ErrorArguments: cl.debugGetStack.errorArguments, CheckCCallLimit: cl.debugGetStack.checkCCallLimit},
 		},
 	}})
 
