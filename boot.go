@@ -94,6 +94,8 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		return cl.drop("key is expired", slog.String("expiry", expiry.String()), slog.String("baseTimestamp", cl.baseTimestamp.String()))
 	}
 
+	cl.logger.Warn("booting subscription", slog.String("discordId", discordId), slog.String("keyId", br.KeyId), slog.String("exploitName", br.ExploitName))
+
 	ubt := uint64(cl.baseTimestamp.Unix())
 
 	isz := strings.Contains(br.ExploitName, "Synapse Z")
