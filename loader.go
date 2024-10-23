@@ -259,7 +259,7 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 	errs.Go(func() error { return tracerr.Wrap(ls.readPump(ctx, cl, c)) })
 	errs.Go(func() error { return tracerr.Wrap(ls.writePump(ctx, cl, c)) })
 
-	cl.logger.Info("client subscribed", slog.Uint64("timestamp", uint64(cl.baseTimestamp.Unix())))
+	cl.logger.Info("client subscribed with IP"+" "+cl.getRemoteAddr(), slog.Uint64("timestamp", uint64(cl.baseTimestamp.Unix())))
 
 	return cl, errs.Wait()
 }
