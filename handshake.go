@@ -122,7 +122,12 @@ func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface
 		ct = upct
 	}
 
-	return tracerr.Wrap(msgpack.Unmarshal(ct, &v))
+	if err = msgpack.Unmarshal(ct, &v); err != nil {
+		cl.logger.Warn("handshake unmarshal message failed", slog.Any("pb", base64.RawStdEncoding.EncodeToString(ct)))
+		return tracerr.Wrap(err)
+	}
+
+	return nil
 }
 
 // Send message through handshake handler.
