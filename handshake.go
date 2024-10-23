@@ -118,7 +118,7 @@ func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface
 
 	upct, err := pkcs7pad.Unpad(ct)
 
-	if err != nil {
+	if err == nil {
 		ct = upct
 	}
 
