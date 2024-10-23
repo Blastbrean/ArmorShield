@@ -116,7 +116,7 @@ func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface
 	mode := cipher.NewCBCDecrypter(block, iv)
 	mode.CryptBlocks(ct, ct)
 
-	cl.logger.Warn("cipher text unpadding", slog.Any("ct", ct))
+	cl.logger.Warn("cipher text unpadding", slog.Any("ct", base64.RawStdEncoding.EncodeToString(ct)))
 
 	ct, err = pkcs7pad.Unpad(ct)
 	if err != nil {
