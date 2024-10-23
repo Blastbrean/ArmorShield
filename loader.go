@@ -151,27 +151,6 @@ func (ls *loaderServer) timePump(ctx context.Context, cl *client, _ *websocket.C
 				return cl.drop("dropped due to inactivity")
 			}
 
-		case <-cl.heartbeatCheckTicker.C:
-			cl.logger.Warn("checking for heartbeat mismatch", slog.Any("received", cl.receivedReports), slog.Any("sent", cl.sentReports))
-
-			if cl.receivedReports <= cl.sentReports {
-				return cl.drop("heartbeat mismatch", slog.Any("received", cl.receivedReports), slog.Any("sent", cl.sentReports))
-			}
-
-		case <-cl.heartbeatTicker.C:
-			cl.logger.Warn("sending heartbeat", slog.Any("received", cl.receivedReports), slog.Any("sent", cl.sentReports))
-
-			if cl.handshakeStageHandler == nil {
-				return cl.drop("handshake not established before heartbeat")
-			}
-
-			cl.sentReports += 1
-
-			return cl.handshakeStageHandler.sendMessage(cl, Message{
-				Id:   PacketIdReport,
-				Data: ReportRequest{},
-			})
-
 		case <-ctx.Done():
 			return tracerr.Wrap(ctx.Err())
 
@@ -194,13 +173,10 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 	subId := uuid.New()
 
 	cl = &client{
-		ls:     ls,
-		app:    ls.app,
-		logger: ls.app.Logger().WithGroup(subId.String()),
-
-		heartbeatTicker:      time.NewTicker(30 * time.Second),
-		heartbeatCheckTicker: time.NewTicker(45 * time.Second),
-		dropTicker:           time.NewTicker(1 * time.Minute),
+		ls:         ls,
+		app:        ls.app,
+		logger:     ls.app.Logger().WithGroup(subId.String()),
+		dropTicker: time.NewTicker(1 * time.Minute),
 
 		subId:         subId,
 		baseTimestamp: time.Now(),

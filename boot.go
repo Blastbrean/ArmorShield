@@ -98,20 +98,12 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 
 	isz := strings.Contains(br.ExploitName, "Synapse Z")
 
-	dgs := ""
 	ifh := ""
 	ls := ""
 
 	if isz {
 		ls = "loadstring"
-	}
-
-	if isz {
 		ifh = "isfunctionhooked"
-	}
-
-	if isz {
-		dgs = "debug_getstack"
 	}
 
 	sh.keyId = br.KeyId
@@ -119,7 +111,6 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 
 	rtn := "return nil"
 	rtam := "return" + " " + "'" + ArmorShieldWatermark + "'"
-	one := 1
 
 	cl.xpcall = &functionData{
 		closureInfoName:   "xpcall",
@@ -153,23 +144,6 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 
 	// @note: normal return check is checking for boolean - not function...
 	// function check will be handled on client side
-	cl.coroutineWrap = &functionData{
-		closureInfoName:   "wrap",
-		checkTrapTriggers: true,
-		checkCCallLimit:   true,
-		checkLuaCallLimit: true,
-		checkLuaStack:     true,
-		isExploitClosure:  false,
-		isLuaClosure:      false,
-		normalArguments:   []FunctionArgument{{FunctionString: &rtn}},
-		errorArguments:    []FunctionArgument{},
-		errorReturnCheck: func(err string) bool {
-			return strings.Contains(err, "missing argument #1")
-		},
-	}
-
-	// @note: normal return check is checking for boolean - not function...
-	// function check will be handled on client side
 	cl.loadString = &functionData{
 		closureInfoName:   ls,
 		checkTrapTriggers: true,
@@ -179,23 +153,6 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		isExploitClosure:  true,
 		isLuaClosure:      false,
 		normalArguments:   []FunctionArgument{{String: &rtam}},
-		errorArguments:    []FunctionArgument{},
-		errorReturnCheck: func(err string) bool {
-			return strings.Contains(err, "missing argument #1")
-		},
-	}
-
-	// @note: normal return check is checking for boolean - not table...
-	// table check will be handled on client side
-	cl.debugGetStack = &functionData{
-		closureInfoName:   dgs,
-		checkTrapTriggers: true,
-		checkCCallLimit:   false,
-		checkLuaCallLimit: true,
-		checkLuaStack:     true,
-		isExploitClosure:  true,
-		isLuaClosure:      false,
-		normalArguments:   []FunctionArgument{{Int: &one}},
 		errorArguments:    []FunctionArgument{},
 		errorReturnCheck: func(err string) bool {
 			return strings.Contains(err, "missing argument #1")

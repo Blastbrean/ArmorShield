@@ -71,13 +71,10 @@ type functionData struct {
 // Packets and messages are queued in a channel to the client from the server.
 // If they're too slow to keep up with the packets or messages, they'll be removed.
 type client struct {
-	ls     *loaderServer
-	app    *pocketbase.PocketBase
-	logger *slog.Logger
-
-	heartbeatTicker      *time.Ticker
-	heartbeatCheckTicker *time.Ticker
-	dropTicker           *time.Ticker
+	ls         *loaderServer
+	app        *pocketbase.PocketBase
+	logger     *slog.Logger
+	dropTicker *time.Ticker
 
 	subId         uuid.UUID
 	baseTimestamp time.Time
@@ -86,9 +83,7 @@ type client struct {
 	reportStageHandler    *reportHandler
 	bootStageHandler      *bootStageHandler
 	stageHandler          stageHandler
-
-	receivedReports byte
-	sentReports     byte
+	receivedReports       byte
 
 	currentStage byte
 	closed       bool
