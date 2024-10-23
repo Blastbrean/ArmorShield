@@ -102,11 +102,13 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 		var pk Packet
 		err = msgpack.Unmarshal(b.Bytes(), &pk)
 		if err != nil {
+			cl.logger.Warn("failed to read packet data", slog.Any("bytes", b.Bytes()))
 			return tracerr.Wrap(err)
 		}
 
 		err = cl.handlePacket(pk)
 		if err != nil {
+			cl.logger.Warn("failed to handle packet data", slog.Any("bytes", b.Bytes()))
 			return tracerr.Wrap(err)
 		}
 	}
