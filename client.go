@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"log/slog"
 	"time"
 
@@ -110,7 +109,7 @@ func (cl *client) writePacket(ctx context.Context, c *websocket.Conn, pk Packet)
 
 	cl.logger.Warn("writing packet", slog.Int("id", int(pk.Id)))
 
-	return c.Write(ctx, websocket.MessageBinary, []byte(base64.StdEncoding.EncodeToString(ser)))
+	return c.Write(ctx, websocket.MessageBinary, ser)
 }
 
 // This function will close the websocket connection and write a close packet.
