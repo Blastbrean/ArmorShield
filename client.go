@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"log/slog"
 	"time"
 
@@ -106,6 +107,8 @@ func (cl *client) writePacket(ctx context.Context, c *websocket.Conn, pk Packet)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
+
+	base64.StdEncoding.Encode(ser, ser)
 
 	cl.logger.Warn("writing packet", slog.Int("id", int(pk.Id)))
 

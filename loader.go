@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"io"
 	"log/slog"
@@ -96,11 +97,18 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 
 		_, err = b.ReadFrom(io.LimitReader(rr, int64(ls.readLimitBytes)))
 		if err != nil {
-			return err
+			return tracerr.Wrap(err)
+		}
+
+		ba := b.Bytes()
+
+		_, err = base64.StdEncoding.Decode(ba, ba)
+		if err != nil {
+			return tracerr.Wrap(err)
 		}
 
 		var pk Packet
-		err = msgpack.Unmarshal(b.Bytes(), &pk)
+		err = msgpack.Unmarshal(ba, &pk)
 		if err != nil {
 			cl.logger.Warn("failed to read packet data", slog.Any("bytes", b.Bytes()))
 			return tracerr.Wrap(err)
