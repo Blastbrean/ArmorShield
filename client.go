@@ -108,11 +108,13 @@ func (cl *client) writePacket(ctx context.Context, c *websocket.Conn, pk Packet)
 		return tracerr.Wrap(err)
 	}
 
-	base64.StdEncoding.Encode(ser, ser)
+	eba := []byte{}
+
+	base64.StdEncoding.Encode(eba, ser)
 
 	cl.logger.Warn("writing packet", slog.Int("id", int(pk.Id)))
 
-	return c.Write(ctx, websocket.MessageBinary, ser)
+	return c.Write(ctx, websocket.MessageText, eba)
 }
 
 // This function will close the websocket connection and write a close packet.
