@@ -100,10 +100,7 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 			return tracerr.Wrap(err)
 		}
 
-		ba := b.Bytes()
-		dba := make([]byte, base64.StdEncoding.DecodedLen(len(ba)))
-
-		_, err = base64.StdEncoding.Decode(dba, ba)
+		dba, err := base64.StdEncoding.DecodeString(b.String())
 		if err != nil {
 			return tracerr.Wrap(err)
 		}
