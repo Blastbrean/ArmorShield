@@ -101,7 +101,7 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 		}
 
 		ba := b.Bytes()
-		dba := []byte{}
+		dba := make([]byte, base64.StdEncoding.DecodedLen(len(ba)))
 
 		_, err = base64.StdEncoding.Decode(dba, ba)
 		if err != nil {

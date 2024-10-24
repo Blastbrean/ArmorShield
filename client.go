@@ -108,7 +108,7 @@ func (cl *client) writePacket(ctx context.Context, c *websocket.Conn, pk Packet)
 		return tracerr.Wrap(err)
 	}
 
-	eba := []byte{}
+	eba := make([]byte, base64.StdEncoding.EncodedLen(len(ser)))
 
 	base64.StdEncoding.Encode(eba, ser)
 
