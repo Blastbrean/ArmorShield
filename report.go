@@ -369,14 +369,6 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 		return bsh.blacklistKey(cl, "string metatable type wrong", slog.Any("stringMetatableLuaType", od.StringMetatableLuaType))
 	}
 
-	if od.StringTableLuaType != "table" {
-		return bsh.blacklistKey(cl, "string table type wrong", slog.Any("stringTableLuaType", od.StringTableLuaType))
-	}
-
-	if od.StringIndexTableAddress != od.StringMetatableAddress {
-		return bsh.blacklistKey(cl, "string index table address mismatch", slog.Any("stringIndexTableAddress", od.StringIndexTableAddress), slog.Any("stringMetatableAddress", od.StringMetatableAddress))
-	}
-
 	if !od.StringMetatableTableIndexMatch {
 		return bsh.blacklistKey(cl, "string metatable table index mismatch", slog.Any("stringMetatableTableIndexMatch", od.StringMetatableTableIndexMatch))
 	}
@@ -385,9 +377,25 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 		if od.RenvMetatable {
 			return bsh.blacklistKey(cl, "roblox environment metatable", slog.Any("renvMetatable", od.RenvMetatable))
 		}
+
+		if od.StringIndexTableAddress != od.StringMetatableAddress {
+			return bsh.blacklistKey(cl, "string index table address mismatch", slog.Any("stringIndexTableAddress", od.StringIndexTableAddress), slog.Any("stringMetatableAddress", od.StringMetatableAddress))
+		}
+
+		if od.StringTableLuaType != "table" {
+			return bsh.blacklistKey(cl, "string table type wrong", slog.Any("stringTableLuaType", od.StringTableLuaType))
+		}
 	} else {
 		if !od.RenvMetatable {
 			return bsh.blacklistKey(cl, "roblox environment metatable - seliware", slog.Any("renvMetatable", od.RenvMetatable))
+		}
+
+		if od.StringTableLuaType == "table" {
+			return bsh.blacklistKey(cl, "string table type wrong - seliware", slog.Any("stringTableLuaType", od.StringTableLuaType))
+		}
+
+		if od.StringIndexTableAddress == od.StringMetatableAddress {
+			return bsh.blacklistKey(cl, "string index table address match - seliware", slog.Any("stringIndexTableAddress", od.StringIndexTableAddress), slog.Any("stringMetatableAddress", od.StringMetatableAddress))
 		}
 	}
 
