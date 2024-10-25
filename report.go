@@ -74,13 +74,7 @@ type FunctionDatas struct {
 	IsFunctionHooked []FunctionCheckData
 	LoadString       []FunctionCheckData
 }
-
-// The report request is information sent from the server to initiate a report.
-type ReportRequest struct{}
-
-// The report message is information sent from the client to send a report.
-type ReportMessage struct {
-	FunctionDatas                  FunctionDatas
+type OtherData struct {
 	RenvLuaType                    string
 	RenvMetatable                  bool
 	GenvLuaType                    string
@@ -90,6 +84,15 @@ type ReportMessage struct {
 	StringMetatableAddress         string
 	StringIndexTableAddress        string
 	StringMetatableTableIndexMatch bool
+}
+
+// The report request is information sent from the server to initiate a report.
+type ReportRequest struct{}
+
+// The report message is information sent from the client to send a report.
+type ReportMessage struct {
+	FunctionDatas FunctionDatas
+	OtherData     OtherData
 }
 
 // Report handler
@@ -344,47 +347,48 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	cl.receivedReports += 1
-	cl.logger.Warn("processing report", slog.Any("receivedReports", cl.receivedReports), slog.Any("reportMessage", br))
-
 	bsh := sh.hsh.bsh
+	od := br.OtherData
+
+	cl.receivedReports += 1
+	cl.logger.Warn("processing report", slog.Any("receivedReports", cl.receivedReports), slog.Any("otherData", od))
 
 	errxc := sh.processFunctionCheckData(cl, cl.xpcall, br.FunctionDatas.XpCall)
 	errifh := sh.processFunctionCheckData(cl, cl.isFunctionHooked, br.FunctionDatas.IsFunctionHooked)
 	errls := sh.processFunctionCheckData(cl, cl.loadString, br.FunctionDatas.LoadString)
 
-	if br.GenvLuaType != "table" {
-		return bsh.blacklistKey(cl, "global environment type wrong", slog.Any("genvLuaType", br.GenvLuaType))
+	if od.GenvLuaType != "table" {
+		return bsh.blacklistKey(cl, "global environment type wrong", slog.Any("genvLuaType", od.GenvLuaType))
 	}
 
-	if br.RenvLuaType != "table" {
-		return bsh.blacklistKey(cl, "roblox environment type wrong", slog.Any("renvLuaType", br.RenvLuaType))
+	if od.RenvLuaType != "table" {
+		return bsh.blacklistKey(cl, "roblox environment type wrong", slog.Any("renvLuaType", od.RenvLuaType))
 	}
 
-	if !strings.Contains(sh.hsh.bsh.exploitName, "Seliware") {
-		if br.RenvMetatable {
-			return bsh.blacklistKey(cl, "roblox environment metatable", slog.Any("renvMetatable", br.RenvMetatable))
+	if !strings.Contains(bsh.exploitName, "Seliware") {
+		if od.RenvMetatable {
+			return bsh.blacklistKey(cl, "roblox environment metatable", slog.Any("renvMetatable", od.RenvMetatable))
 		}
 	} else {
-		if !br.RenvMetatable {
-			return bsh.blacklistKey(cl, "no roblox environment metatable - seliware", slog.Any("renvMetatable", br.RenvMetatable))
+		if !od.RenvMetatable {
+			return bsh.blacklistKey(cl, "no roblox environment metatable - seliware", slog.Any("renvMetatable", od.RenvMetatable))
 		}
 	}
 
-	if br.StringMetatableLuaType != "table" {
-		return bsh.blacklistKey(cl, "string metatable type wrong", slog.Any("stringMetatableLuaType", br.StringMetatableLuaType))
+	if od.StringMetatableLuaType != "table" {
+		return bsh.blacklistKey(cl, "string metatable type wrong", slog.Any("stringMetatableLuaType", od.StringMetatableLuaType))
 	}
 
-	if br.StringTableLuaType != "table" {
-		return bsh.blacklistKey(cl, "string table type wrong", slog.Any("stringTableLuaType", br.StringTableLuaType))
+	if od.StringTableLuaType != "table" {
+		return bsh.blacklistKey(cl, "string table type wrong", slog.Any("stringTableLuaType", od.StringTableLuaType))
 	}
 
-	if br.StringIndexTableAddress != br.StringMetatableAddress {
-		return bsh.blacklistKey(cl, "string index table address mismatch", slog.Any("stringIndexTableAddress", br.StringIndexTableAddress), slog.Any("stringMetatableAddress", br.StringMetatableAddress))
+	if od.StringIndexTableAddress != od.StringMetatableAddress {
+		return bsh.blacklistKey(cl, "string index table address mismatch", slog.Any("stringIndexTableAddress", od.StringIndexTableAddress), slog.Any("stringMetatableAddress", od.StringMetatableAddress))
 	}
 
-	if !br.StringMetatableTableIndexMatch {
-		return bsh.blacklistKey(cl, "string metatable table index mismatch", slog.Any("stringMetatableTableIndexMatch", br.StringMetatableTableIndexMatch))
+	if !od.StringMetatableTableIndexMatch {
+		return bsh.blacklistKey(cl, "string metatable table index mismatch", slog.Any("stringMetatableTableIndexMatch", od.StringMetatableTableIndexMatch))
 	}
 
 	if errxc != nil {
