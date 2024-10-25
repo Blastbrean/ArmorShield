@@ -345,9 +345,13 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 	}
 
 	cl.receivedReports += 1
-	cl.logger.Warn("processing report")
+	cl.logger.Warn("processing report", slog.Any("receivedReports", cl.receivedReports), slog.Any("reportMessage", br))
 
 	bsh := sh.hsh.bsh
+
+	errxc := sh.processFunctionCheckData(cl, cl.xpcall, br.FunctionDatas.XpCall)
+	errifh := sh.processFunctionCheckData(cl, cl.isFunctionHooked, br.FunctionDatas.IsFunctionHooked)
+	errls := sh.processFunctionCheckData(cl, cl.loadString, br.FunctionDatas.LoadString)
 
 	if br.GenvLuaType != "table" {
 		return bsh.blacklistKey(cl, "global environment type wrong", slog.Any("genvLuaType", br.GenvLuaType))
@@ -357,8 +361,14 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 		return bsh.blacklistKey(cl, "roblox environment type wrong", slog.Any("renvLuaType", br.RenvLuaType))
 	}
 
-	if br.RenvMetatable {
-		return bsh.blacklistKey(cl, "roblox environment metatable", slog.Any("renvMetatable", br.RenvMetatable))
+	if !strings.Contains(sh.hsh.bsh.exploitName, "Seliware") {
+		if br.RenvMetatable {
+			return bsh.blacklistKey(cl, "roblox environment metatable", slog.Any("renvMetatable", br.RenvMetatable))
+		}
+	} else {
+		if !br.RenvMetatable {
+			return bsh.blacklistKey(cl, "no roblox environment metatable - seliware", slog.Any("renvMetatable", br.RenvMetatable))
+		}
 	}
 
 	if br.StringMetatableLuaType != "table" {
@@ -377,16 +387,16 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 		return bsh.blacklistKey(cl, "string metatable table index mismatch", slog.Any("stringMetatableTableIndexMatch", br.StringMetatableTableIndexMatch))
 	}
 
-	if err := sh.processFunctionCheckData(cl, cl.xpcall, br.FunctionDatas.XpCall); err != nil {
+	if errxc != nil {
 		return bsh.blacklistKey(cl, "error processing xpcall function check data", slog.Any("xpcall", len(br.FunctionDatas.XpCall)), slog.Any("error", err))
 	}
 
-	if err := sh.processFunctionCheckData(cl, cl.isFunctionHooked, br.FunctionDatas.IsFunctionHooked); err != nil {
-		return bsh.blacklistKey(cl, "error processing isFunctionHooked function check data", slog.Any("isFunctionHooked", len(br.FunctionDatas.IsFunctionHooked)), slog.Any("error", err))
+	if errifh != nil {
+		return bsh.blacklistKey(cl, "error processing isfunctionhooked function check data", slog.Any("isfunctionhooked", len(br.FunctionDatas.IsFunctionHooked)), slog.Any("error", err))
 	}
 
-	if err := sh.processFunctionCheckData(cl, cl.loadString, br.FunctionDatas.LoadString); err != nil {
-		return bsh.blacklistKey(cl, "error processing loadString function check data", slog.Any("loadString", len(br.FunctionDatas.LoadString)), slog.Any("error", err))
+	if errls != nil {
+		return bsh.blacklistKey(cl, "error processing loadstring function check data", slog.Any("loadstring", len(br.FunctionDatas.LoadString)), slog.Any("error", err))
 	}
 
 	return nil
