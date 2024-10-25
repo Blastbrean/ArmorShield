@@ -99,11 +99,12 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	ubt := uint64(cl.baseTimestamp.Unix())
 
 	isz := strings.Contains(br.ExploitName, "Synapse Z")
+	isnihon := strings.Contains(br.ExploitName, "Nihon")
 
 	ifh := ""
 	ls := ""
 
-	if isz {
+	if isz || isnihon {
 		ls = "loadstring"
 		ifh = "isfunctionhooked"
 	}
