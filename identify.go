@@ -264,8 +264,6 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 		return sh.hsh.bsh.blacklistKey(cl, "fingerprint has blacklisted key(s) connected (request support)", slog.String("error", err.Error()), slog.Any("fingerprintInfo", im.KeyInfo.FingerprintInfo))
 	}
 
-	cl.logger.Info("current analytics information", slog.Any("analyticsInfo", im.KeyInfo.AnalyticsInfo))
-
 	if err := checkMismatch(en, &im.KeyInfo.FingerprintInfo, fr, ar, &im.KeyInfo.AnalyticsInfo); err != nil {
 		return cl.drop("information mismatch (you need to reset HWID)", slog.String("error", err.Error()), slog.Any("analyticsInfo", im.KeyInfo.AnalyticsInfo), slog.Any("fingerprintInfo", im.KeyInfo.FingerprintInfo))
 	}

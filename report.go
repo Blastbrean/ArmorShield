@@ -365,16 +365,6 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 		return bsh.blacklistKey(cl, "roblox environment type wrong", slog.Any("renvLuaType", od.RenvLuaType))
 	}
 
-	if !strings.Contains(bsh.exploitName, "Seliware") {
-		if od.RenvMetatable {
-			return bsh.blacklistKey(cl, "roblox environment metatable", slog.Any("renvMetatable", od.RenvMetatable))
-		}
-	} else {
-		if !od.RenvMetatable {
-			return bsh.blacklistKey(cl, "no roblox environment metatable - seliware", slog.Any("renvMetatable", od.RenvMetatable))
-		}
-	}
-
 	if od.StringMetatableLuaType != "table" {
 		return bsh.blacklistKey(cl, "string metatable type wrong", slog.Any("stringMetatableLuaType", od.StringMetatableLuaType))
 	}
@@ -389,6 +379,16 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 
 	if !od.StringMetatableTableIndexMatch {
 		return bsh.blacklistKey(cl, "string metatable table index mismatch", slog.Any("stringMetatableTableIndexMatch", od.StringMetatableTableIndexMatch))
+	}
+
+	if !strings.Contains(bsh.exploitName, "Seliware") {
+		if od.RenvMetatable {
+			return bsh.blacklistKey(cl, "roblox environment metatable", slog.Any("renvMetatable", od.RenvMetatable))
+		}
+	} else {
+		if !od.RenvMetatable {
+			return bsh.blacklistKey(cl, "roblox environment metatable - seliware", slog.Any("renvMetatable", od.RenvMetatable))
+		}
 	}
 
 	if errxc != nil {
