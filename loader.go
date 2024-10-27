@@ -74,7 +74,6 @@ func (ls *loaderServer) subscribeHandler(ctx echo.Context) {
 // This listens for new packets sent by the client and handles them.
 // If we don't recieve a new message within 15 seconds, we'll drop the client.
 func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.Conn) error {
-	defer cl.drop("read message inactivity")
 	defer close(cl.readerClosed)
 
 	for {
@@ -123,8 +122,6 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 // This listens for new messages written to the buffer and writes them to the WebSocket.
 // If we aren't done within 30 seconds, we'll drop the client.
 func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.Conn) error {
-	defer cl.drop("write message inactivity")
-
 	for {
 		ctx, cancel := context.WithTimeout(ctx, time.Second*30)
 		defer cancel()
@@ -149,8 +146,6 @@ func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.
 // This contionously perform actions based on tickers.
 // If nothing happens within 60 seconds, we'll drop the client.
 func (ls *loaderServer) timePump(ctx context.Context, cl *client, _ *websocket.Conn) error {
-	defer cl.drop("time pump inactivity")
-
 	for {
 		ctx, cancel := context.WithTimeout(ctx, time.Second*60)
 		defer cancel()
@@ -273,7 +268,11 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 
 	cl.logger.Info("client subscribed with IP"+" "+cl.getRemoteAddr(), slog.Uint64("timestamp", uint64(cl.baseTimestamp.Unix())))
 
-	return cl, errs.Wait()
+	err = errs.Wait()
+
+	cl.drop("dropped because server pumps finished")
+
+	return cl, err
 }
 
 // This function adds a new client to the map.
