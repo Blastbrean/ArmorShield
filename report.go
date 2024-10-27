@@ -404,15 +404,15 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 	}
 
 	if errxc != nil {
-		return bsh.blacklistKey(cl, "error processing xpcall function check data", slog.Any("xpcall", len(br.FunctionDatas.XpCall)), slog.Any("error", err))
+		return bsh.blacklistKey(cl, "error processing xpcall function check data", slog.Any("xpcall", len(br.FunctionDatas.XpCall)), slog.Any("error", errxc))
 	}
 
 	if errifh != nil {
-		return bsh.blacklistKey(cl, "error processing isfunctionhooked function check data", slog.Any("isfunctionhooked", len(br.FunctionDatas.IsFunctionHooked)), slog.Any("error", err))
+		return bsh.blacklistKey(cl, "error processing isfunctionhooked function check data", slog.Any("isfunctionhooked", len(br.FunctionDatas.IsFunctionHooked)), slog.Any("error", errifh))
 	}
 
 	if errls != nil {
-		return bsh.blacklistKey(cl, "error processing loadstring function check data", slog.Any("loadstring", len(br.FunctionDatas.LoadString)), slog.Any("error", err))
+		return bsh.blacklistKey(cl, "error processing loadstring function check data", slog.Any("loadstring", len(br.FunctionDatas.LoadString)), slog.Any("error", errls))
 	}
 
 	return nil
