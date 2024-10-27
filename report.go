@@ -268,12 +268,13 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 		}
 
 		if fd.checkLuaCallLimit {
-			if idx == CheckFunctionLuaCallSuccess && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function lua call success")
-			}
+			if idx == CheckFunctionLuaCallSuccess && fcd.Boolean != nil && !*fcd.Boolean {
+				flcr := lfcd[idx+1]
+				idx += 1
 
-			if idx == CheckFunctionLuaCallResult && fcd.String != nil && strings.Contains(*fcd.String, "stack overflow") {
-				return tracerr.New("function lua call return")
+				if flcr.String != nil && strings.Contains(*flcr.String, "stack overflow") {
+					return tracerr.New("bad function lua call stack")
+				}
 			}
 		}
 
