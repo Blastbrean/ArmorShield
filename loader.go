@@ -74,6 +74,7 @@ func (ls *loaderServer) subscribeHandler(ctx echo.Context) {
 // This listens for new packets sent by the client and handles them.
 // If we don't recieve a new message within 15 seconds, we'll drop the client.
 func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.Conn) error {
+	defer c.CloseNow()
 	defer close(cl.readerClosed)
 
 	for {
@@ -208,7 +209,7 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 			mu.Lock()
 			defer mu.Unlock()
 
-			attrs := append([]any{slog.Any("traceback", tracerr.StackTrace(err))}, args...)
+			attrs := append([]any{slog.Any("reason", reason), slog.Any("traceback", tracerr.StackTrace(err))}, args...)
 			cl.logger.Error("failed connection", attrs...)
 
 			if c != nil {
@@ -226,7 +227,8 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 			mu.Lock()
 			defer mu.Unlock()
 
-			cl.logger.Warn("dropped connection", args...)
+			attrs := append([]any{slog.Any("reason", reason)}, args...)
+			cl.logger.Warn("dropped connection", attrs...)
 
 			err := error(nil)
 
@@ -268,11 +270,7 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 
 	cl.logger.Info("client subscribed with IP"+" "+cl.getRemoteAddr(), slog.Uint64("timestamp", uint64(cl.baseTimestamp.Unix())))
 
-	err = errs.Wait()
-
-	cl.drop("dropped because server pumps finished")
-
-	return cl, err
+	return cl, errs.Wait()
 }
 
 // This function adds a new client to the map.

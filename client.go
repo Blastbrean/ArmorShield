@@ -125,8 +125,6 @@ func (cl *client) closeConn(ctx context.Context, c *websocket.Conn, status webso
 		return tracerr.Wrap(err)
 	}
 
-	cl.logger.Warn("closing connection", slog.String("reason", reason))
-
 	err = cl.writePacket(ctx, c, Packet{Id: PacketIdDropping, Msg: ser})
 
 	c.Close(status, reason)
