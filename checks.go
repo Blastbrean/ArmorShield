@@ -11,11 +11,11 @@ func checkAssosiation(ji *JoinInfo) error {
 		return tracerr.New("group assosiation")
 	}
 
-	if usm := NewUniverse(ji.UserFollowing).SliceMatches([]uint64{112508646, 3657821880, 141656968, 4379286741, 972539685, 2046352519}); len(usm) > 0 {
+	if usm := NewUniverse(ji.UserFollowing).SliceMatches([]uint64{112508646, 3657821880, 5463447056, 141656968, 4379286741, 972539685, 2046352519}); len(usm) > 0 {
 		return tracerr.New("following assosiation")
 	}
 
-	if usm := NewUniverse(ji.UserFriends).SliceMatches([]uint64{112508646, 3657821880, 141656968, 4379286741, 972539685, 2046352519}); len(usm) > 0 {
+	if usm := NewUniverse(ji.UserFriends).SliceMatches([]uint64{112508646, 3657821880, 5463447056, 141656968, 4379286741, 972539685, 2046352519}); len(usm) > 0 {
 		return tracerr.New("friends assosiation")
 	}
 

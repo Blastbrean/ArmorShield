@@ -269,7 +269,7 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 	}
 
 	if err := checkAssosiation(&im.SubInfo.JoinInfo); err != nil && !kr.GetBool("cleared") {
-		return cl.drop("account must be cleared (request support)", slog.String("error", err.Error()), slog.Any("joinInfo", im.SubInfo.JoinInfo))
+		cl.logger.Warn("account is suspicious", slog.String("error", err.Error()), slog.Any("joinInfo", im.SubInfo.JoinInfo))
 	}
 
 	// @todo: BOLO:
