@@ -52,6 +52,10 @@ func (sh loadStageHandler) handlePacket(cl *client, pk Packet) error {
 		return cl.drop("failed to get project from key", slog.String("record", kr.GetId()))
 	}
 
+	if kr.GetString("role") == "pentest" && lm.GameId != 1430993116 {
+		return cl.fail("unable to load script outside of baseplate as a pentester", nil)
+	}
+
 	sr, err := cl.app.Dao().FindFirstRecordByFilter("scripts", "project = {:projectId} && game = {:gameId}", dbx.Params{"projectId": pr.GetId(), "gameId": lm.GameId})
 	if err != nil {
 		return cl.fail("failed to find script for game", err)
