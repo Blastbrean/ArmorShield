@@ -102,7 +102,7 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 			readLimit = ls.afterEstablishedBytes
 		}
 
-		cl.logger.Info("readPump readLimit", slog.Int("readLimit", readLimit))
+		cl.logger.Info("read limit", slog.Int("readLimit", readLimit))
 
 		_, err = b.ReadFrom(io.LimitReader(rr, int64(readLimit)))
 		if err != nil {
