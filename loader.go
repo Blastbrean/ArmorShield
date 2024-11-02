@@ -107,13 +107,15 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 			return tracerr.Wrap(err)
 		}
 
-		dst := make([]byte, base64.StdEncoding.DecodedLen(len(b.String())))
-		dbr, err := base64.StdEncoding.Decode(dst, []byte(b.String()))
+		bs := b.String()
+
+		dst := make([]byte, base64.StdEncoding.DecodedLen(len(bs)))
+		dbr, err := base64.StdEncoding.Decode(dst, []byte(bs))
 		if err != nil {
 			return tracerr.Wrap(err)
 		}
 
-		cl.logger.Warn("unmarshal packet", slog.Any("dbr", dbr), slog.Any("stringLen", len(b.String())))
+		cl.logger.Warn("unmarshal packet", slog.Any("dbr", dbr), slog.Any("stringLen", len(bs)))
 
 		var pk Packet
 		err = msgpack.Unmarshal(dst, &pk)
