@@ -56,10 +56,8 @@ type FunctionArgument struct {
 // Function data
 type functionData struct {
 	closureInfoName   string
-	checkCCallLimit   bool
 	checkLuaCallLimit bool
 	checkTrapTriggers bool
-	checkLuaStack     bool
 	isExploitClosure  bool
 	isLuaClosure      bool
 	normalArguments   []FunctionArgument

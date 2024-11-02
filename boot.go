@@ -118,9 +118,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	cl.xpcall = &functionData{
 		closureInfoName:   "xpcall",
 		checkTrapTriggers: true,
-		checkCCallLimit:   true,
 		checkLuaCallLimit: true,
-		checkLuaStack:     true,
 		isExploitClosure:  false,
 		isLuaClosure:      false,
 		normalArguments:   []FunctionArgument{{FunctionString: &rtn}, {FunctionString: &rtn}},
@@ -133,9 +131,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	cl.isFunctionHooked = &functionData{
 		closureInfoName:   ifh,
 		checkTrapTriggers: true,
-		checkCCallLimit:   true,
 		checkLuaCallLimit: true,
-		checkLuaStack:     true,
 		isExploitClosure:  true,
 		isLuaClosure:      false,
 		normalArguments:   []FunctionArgument{{FunctionString: &rtn}},
@@ -150,9 +146,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	cl.loadString = &functionData{
 		closureInfoName:   ls,
 		checkTrapTriggers: true,
-		checkCCallLimit:   true,
 		checkLuaCallLimit: true,
-		checkLuaStack:     true,
 		isExploitClosure:  true,
 		isLuaClosure:      false,
 		normalArguments:   []FunctionArgument{{String: &rtam}},
@@ -169,9 +163,9 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		BaseTimestamp: ubt,
 		SubId:         cl.subId,
 		ClientFunctionDatas: ClientFunctionDatas{
-			XpCall:           ClientFunctionData{ClosureInfoName: cl.xpcall.closureInfoName, NormalArguments: cl.xpcall.normalArguments, ErrorArguments: cl.xpcall.errorArguments, CheckCCallLimit: cl.xpcall.checkCCallLimit},
-			IsFunctionHooked: ClientFunctionData{ClosureInfoName: cl.isFunctionHooked.closureInfoName, NormalArguments: cl.isFunctionHooked.normalArguments, ErrorArguments: cl.isFunctionHooked.errorArguments, CheckCCallLimit: cl.isFunctionHooked.checkCCallLimit},
-			LoadString:       ClientFunctionData{ClosureInfoName: cl.loadString.closureInfoName, NormalArguments: cl.loadString.normalArguments, ErrorArguments: cl.loadString.errorArguments, CheckCCallLimit: cl.loadString.checkCCallLimit},
+			XpCall:           ClientFunctionData{ClosureInfoName: cl.xpcall.closureInfoName, NormalArguments: cl.xpcall.normalArguments, ErrorArguments: cl.xpcall.errorArguments},
+			IsFunctionHooked: ClientFunctionData{ClosureInfoName: cl.isFunctionHooked.closureInfoName, NormalArguments: cl.isFunctionHooked.normalArguments, ErrorArguments: cl.isFunctionHooked.errorArguments},
+			LoadString:       ClientFunctionData{ClosureInfoName: cl.loadString.closureInfoName, NormalArguments: cl.loadString.normalArguments, ErrorArguments: cl.loadString.errorArguments},
 		},
 	}})
 

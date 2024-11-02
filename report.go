@@ -34,11 +34,6 @@ const (
 	CheckFunctionTrapTableMetaTable
 	CheckFunctionTrapTableWatermark
 	CheckFunctionTrapTableMismatch
-	CheckFunctionWrappedEnvironment
-	CheckFunctionWrappedExecutorClosure
-	CheckFunctionWrappedLuaClosure
-	CheckFunctionWrappedSetEnvironment
-	CheckFunctionWrappedError
 	CheckFunctionRestore
 )
 
@@ -297,34 +292,6 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 
 			if idx == CheckFunctionTrapTableMismatch && fcd.Boolean != nil && *fcd.Boolean {
 				return tracerr.New("function trap table mismatch")
-			}
-		}
-
-		if fd.checkCCallLimit {
-			if idx == CheckFunctionWrappedEnvironment && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function wrapped environment")
-			}
-
-			if idx == CheckFunctionWrappedEnvironment && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function wrapped executor closure")
-			}
-
-			if idx == CheckFunctionWrappedLuaClosure && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function wrapped lua closure")
-			}
-
-			if idx == CheckFunctionWrappedSetEnvironment && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function wrapped set environment")
-			}
-
-			if idx == CheckFunctionWrappedError {
-				if fcd.Boolean != nil && !*fcd.Boolean {
-					return tracerr.New("function wrapped error failure")
-				}
-
-				if fcd.String != nil && strings.Contains(*fcd.String, "C stack overflow") {
-					return tracerr.New("function wrapped error")
-				}
 			}
 		}
 
