@@ -265,6 +265,8 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 		return cl, tracerr.Wrap(err)
 	}
 
+	c2.SetReadLimit(200000)
+
 	mu.Lock()
 
 	if cl.closed {
