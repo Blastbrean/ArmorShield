@@ -98,7 +98,7 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 
 		readLimit := ls.readLimitBytes
 
-		if cl.currentStage == ClientStageEstablished {
+		if cl.currentStage >= ClientStageEstablished {
 			readLimit = ls.afterEstablishedBytes
 		}
 
