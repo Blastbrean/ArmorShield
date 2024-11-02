@@ -11,8 +11,6 @@ import (
 // Report checks
 const (
 	CheckFunctionHook = iota
-	CheckDummyFunctionHook
-	CheckDummyFunctionRestoreHook
 	CheckFunctionDebugGetInfo
 	CheckFunctionDebugInfo
 	CheckFunctionUpvaluesOk
@@ -138,14 +136,6 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 
 		if idx == CheckFunctionHook && fcd.Boolean != nil && *fcd.Boolean {
 			return tracerr.New("function is hooked")
-		}
-
-		if idx == CheckDummyFunctionHook && fcd.Boolean != nil && !*fcd.Boolean {
-			return tracerr.New("hooked dummy is unexpectedly not hooked")
-		}
-
-		if idx == CheckDummyFunctionRestoreHook && fcd.Boolean != nil && *fcd.Boolean {
-			return tracerr.New("restored dummy is unexpectedly hooked")
 		}
 
 		if idx == CheckFunctionDebugGetInfo && fcd.GetInfo != nil {
