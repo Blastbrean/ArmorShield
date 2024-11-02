@@ -112,7 +112,7 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 			return tracerr.Wrap(err)
 		}
 
-		cl.logger.Warn("unmarshal packet", slog.Any("dba", len(dba)))
+		cl.logger.Warn("unmarshal packet", slog.Any("dba", len(dba)), slog.Any("stringLen", len(b.String())))
 
 		var pk Packet
 		err = msgpack.Unmarshal(dba, &pk)

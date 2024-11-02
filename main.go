@@ -19,7 +19,7 @@ func main() {
 		logger:                app.Logger().WithGroup("ls"),
 		messageBufferLimit:    16,
 		packetBufferLimit:     16,
-		readLimitBytes:        16384,
+		readLimitBytes:        20000,
 		afterEstablishedBytes: 200000,
 		broadcastLimiter:      rate.NewLimiter(rate.Every(time.Millisecond*100), 8),
 		clients:               make(map[*client]struct{}),
