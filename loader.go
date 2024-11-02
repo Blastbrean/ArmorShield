@@ -32,7 +32,8 @@ type loaderServer struct {
 
 	// The "readLimitBytes" controls the max number bytes that will be read for one client.
 	// Defaults to 4096.
-	readLimitBytes int
+	readLimitBytes        int
+	afterEstablishedBytes int
 
 	// broadcastLimiter controls the rate limit applied to the broadcast endpoint.
 	// Defaults to one broadcast every 100ms with a burst of 8.
@@ -95,7 +96,13 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 		b := Get()
 		defer Put(b)
 
-		_, err = b.ReadFrom(io.LimitReader(rr, int64(ls.readLimitBytes)))
+		readLimit := ls.readLimitBytes
+
+		if cl.currentStage == ClientStageEstablished {
+			readLimit = ls.afterEstablishedBytes
+		}
+
+		_, err = b.ReadFrom(io.LimitReader(rr, int64(readLimit)))
 		if err != nil {
 			return tracerr.Wrap(err)
 		}

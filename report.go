@@ -67,6 +67,15 @@ type FunctionDatas struct {
 	IsFunctionHooked []FunctionCheckData
 	LoadString       []FunctionCheckData
 }
+
+type ExecutorClosure struct {
+	Constants        []string
+	Protos           []FunctionDebugGetInfo
+	UpvalueFunctions []FunctionDebugGetInfo
+	UpvalueData      []string
+	GetInfo          FunctionDebugGetInfo
+}
+
 type OtherData struct {
 	RenvLuaType                    string
 	RenvMetatable                  bool
@@ -77,6 +86,8 @@ type OtherData struct {
 	StringMetatableAddress         string
 	StringIndexTableAddress        string
 	StringMetatableTableIndexMatch bool
+	LogHistory                     []string
+	ExecutorClosures               []ExecutorClosure
 }
 
 // The report request is information sent from the server to initiate a report.

@@ -15,13 +15,14 @@ func main() {
 	app := pocketbase.New()
 
 	ls := loaderServer{
-		app:                app,
-		logger:             app.Logger().WithGroup("ls"),
-		messageBufferLimit: 16,
-		packetBufferLimit:  16,
-		readLimitBytes:     16384,
-		broadcastLimiter:   rate.NewLimiter(rate.Every(time.Millisecond*100), 8),
-		clients:            make(map[*client]struct{}),
+		app:                   app,
+		logger:                app.Logger().WithGroup("ls"),
+		messageBufferLimit:    16,
+		packetBufferLimit:     16,
+		readLimitBytes:        16384,
+		afterEstablishedBytes: 200000,
+		broadcastLimiter:      rate.NewLimiter(rate.Every(time.Millisecond*100), 8),
+		clients:               make(map[*client]struct{}),
 	}
 
 	app.OnRecordAfterUpdateRequest("keys").Add(func(e *core.RecordUpdateEvent) error {
