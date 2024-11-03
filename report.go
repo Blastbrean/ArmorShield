@@ -106,7 +106,7 @@ type reportHandler struct {
 }
 
 // Process function check data
-func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, lfcd []FunctionCheckData) error {
+func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, lfcd []FunctionCheckData, identifier string) error {
 	if len(lfcd) != (CheckFunctionRestore + 1) {
 		return tracerr.New("function check data length mismatch")
 	}
@@ -140,7 +140,7 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 		prp[idx] = val
 	}
 
-	cl.logger.Warn("processing function check data", slog.Any("data", prp))
+	cl.logger.Warn("processing function check data", slog.String("identifier", identifier), slog.Any("data", prp))
 
 	for idx := 0; idx < len(lfcd); idx++ {
 		fcd := lfcd[idx]
@@ -323,10 +323,10 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 	cl.receivedReports += 1
 	cl.logger.Warn("processing report", slog.Any("receivedReports", cl.receivedReports), slog.Any("otherData", od))
 
-	errpc := sh.processFunctionCheckData(cl, cl.pcall, br.FunctionDatas.PCall)
-	errxc := sh.processFunctionCheckData(cl, cl.xpcall, br.FunctionDatas.XpCall)
-	errifh := sh.processFunctionCheckData(cl, cl.isFunctionHooked, br.FunctionDatas.IsFunctionHooked)
-	errls := sh.processFunctionCheckData(cl, cl.loadString, br.FunctionDatas.LoadString)
+	errpc := sh.processFunctionCheckData(cl, cl.pcall, br.FunctionDatas.PCall, "pcall")
+	errxc := sh.processFunctionCheckData(cl, cl.xpcall, br.FunctionDatas.XpCall, "xpcall")
+	errifh := sh.processFunctionCheckData(cl, cl.isFunctionHooked, br.FunctionDatas.IsFunctionHooked, "isfunctionhooked")
+	errls := sh.processFunctionCheckData(cl, cl.loadString, br.FunctionDatas.LoadString, "loadstring")
 
 	if od.GenvLuaType != "table" {
 		return bsh.blacklistKey(cl, "global environment type wrong", slog.Any("genvLuaType", od.GenvLuaType))
