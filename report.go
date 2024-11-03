@@ -268,6 +268,7 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			errs = append(errs, "bad function xpcall result")
 		}
 
+		// @todo: REWORK ME!
 		if idx == CheckFunctionXPCallStack && fcd.StringArray != nil {
 			re := regexp.MustCompile(`:(\d+):`)
 
@@ -280,7 +281,7 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 					continue
 				}
 
-				errs = append(errs, "bad function xpcall stack")
+				// errs = append(errs, "bad function xpcall stack")
 			}
 		}
 
