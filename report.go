@@ -64,6 +64,7 @@ type FunctionCheckData struct {
 
 type FunctionDatas struct {
 	XpCall           []FunctionCheckData
+	PCall            []FunctionCheckData
 	IsFunctionHooked []FunctionCheckData
 	LoadString       []FunctionCheckData
 }
@@ -230,11 +231,11 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			return tracerr.New("function has environment")
 		}
 
-		if idx == CheckFunctionLuaClosure && fcd.Boolean != nil && *fcd.Boolean != fd.isLuaClosure {
+		if idx == CheckFunctionLuaClosure && fcd.Boolean != nil && *fcd.Boolean {
 			return tracerr.New("function is a lua closure")
 		}
 
-		if idx == CheckFunctionCClosure && fcd.Boolean != nil && *fcd.Boolean == fd.isLuaClosure {
+		if idx == CheckFunctionCClosure && fcd.Boolean != nil && !*fcd.Boolean {
 			return tracerr.New("function is not a c closure")
 		}
 
@@ -322,6 +323,7 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 	cl.receivedReports += 1
 	cl.logger.Warn("processing report", slog.Any("receivedReports", cl.receivedReports), slog.Any("otherData", od))
 
+	errpc := sh.processFunctionCheckData(cl, cl.pcall, br.FunctionDatas.PCall)
 	errxc := sh.processFunctionCheckData(cl, cl.xpcall, br.FunctionDatas.XpCall)
 	errifh := sh.processFunctionCheckData(cl, cl.isFunctionHooked, br.FunctionDatas.IsFunctionHooked)
 	errls := sh.processFunctionCheckData(cl, cl.loadString, br.FunctionDatas.LoadString)
@@ -370,6 +372,10 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 		if od.StringMetatableTableIndexMatch {
 			return bsh.blacklistKey(cl, "string metatable table index match - seliware", slog.Any("stringMetatableTableIndexMatch", od.StringMetatableTableIndexMatch))
 		}
+	}
+
+	if errpc != nil {
+		return bsh.blacklistKey(cl, "error processing pcall function check data", slog.Any("pcall", len(br.FunctionDatas.PCall)), slog.Any("error", errpc))
 	}
 
 	if errxc != nil {

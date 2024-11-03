@@ -26,9 +26,9 @@ type ClientFunctionData struct {
 
 // Client function datas
 type ClientFunctionDatas struct {
+	PCall            ClientFunctionData
 	XpCall           ClientFunctionData
 	IsFunctionHooked ClientFunctionData
-	CoroutineWrap    ClientFunctionData
 	LoadString       ClientFunctionData
 	DebugGetStack    ClientFunctionData
 }
@@ -115,12 +115,23 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	rtn := "return nil"
 	rtam := "return" + " " + "'" + ArmorShieldWatermark + "'"
 
+	cl.pcall = &functionData{
+		closureInfoName:   "pcall",
+		checkTrapTriggers: true,
+		checkLuaCallLimit: true,
+		isExploitClosure:  false,
+		normalArguments:   []FunctionArgument{{FunctionString: &rtn}},
+		errorArguments:    []FunctionArgument{},
+		errorReturnCheck: func(err string) bool {
+			return strings.Contains(err, "missing argument #1")
+		},
+	}
+
 	cl.xpcall = &functionData{
 		closureInfoName:   "xpcall",
 		checkTrapTriggers: true,
 		checkLuaCallLimit: true,
 		isExploitClosure:  false,
-		isLuaClosure:      false,
 		normalArguments:   []FunctionArgument{{FunctionString: &rtn}, {FunctionString: &rtn}},
 		errorArguments:    []FunctionArgument{},
 		errorReturnCheck: func(err string) bool {
@@ -133,7 +144,6 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		checkTrapTriggers: true,
 		checkLuaCallLimit: true,
 		isExploitClosure:  true,
-		isLuaClosure:      false,
 		normalArguments:   []FunctionArgument{{FunctionString: &rtn}},
 		errorArguments:    []FunctionArgument{},
 		errorReturnCheck: func(err string) bool {
@@ -148,7 +158,6 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		checkTrapTriggers: true,
 		checkLuaCallLimit: true,
 		isExploitClosure:  true,
-		isLuaClosure:      false,
 		normalArguments:   []FunctionArgument{{String: &rtam}},
 		errorArguments:    []FunctionArgument{},
 		errorReturnCheck: func(err string) bool {
@@ -163,6 +172,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		BaseTimestamp: ubt,
 		SubId:         cl.subId,
 		ClientFunctionDatas: ClientFunctionDatas{
+			PCall:            ClientFunctionData{ClosureInfoName: cl.pcall.closureInfoName, NormalArguments: cl.pcall.normalArguments, ErrorArguments: cl.pcall.errorArguments},
 			XpCall:           ClientFunctionData{ClosureInfoName: cl.xpcall.closureInfoName, NormalArguments: cl.xpcall.normalArguments, ErrorArguments: cl.xpcall.errorArguments},
 			IsFunctionHooked: ClientFunctionData{ClosureInfoName: cl.isFunctionHooked.closureInfoName, NormalArguments: cl.isFunctionHooked.normalArguments, ErrorArguments: cl.isFunctionHooked.errorArguments},
 			LoadString:       ClientFunctionData{ClosureInfoName: cl.loadString.closureInfoName, NormalArguments: cl.loadString.normalArguments, ErrorArguments: cl.loadString.errorArguments},

@@ -59,7 +59,6 @@ type functionData struct {
 	checkLuaCallLimit bool
 	checkTrapTriggers bool
 	isExploitClosure  bool
-	isLuaClosure      bool
 	normalArguments   []FunctionArgument
 	errorArguments    []FunctionArgument
 	errorReturnCheck  func(err string) bool
@@ -94,6 +93,7 @@ type client struct {
 	drop          func(reason string, args ...any) error
 
 	xpcall           *functionData
+	pcall            *functionData
 	isFunctionHooked *functionData
 	loadString       *functionData
 }
