@@ -271,6 +271,8 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 		if idx == CheckFunctionXPCallStack && fcd.StringArray != nil {
 			re := regexp.MustCompile(`:(\d+):`)
 
+			cl.logger.Warn("processing xpcall stack", slog.String("identifier", identifier), slog.Any("stringArray", fcd.StringArray))
+
 			for _, s := range *fcd.StringArray {
 				matches := re.FindStringSubmatch(s)
 
@@ -322,7 +324,7 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			}
 		}
 
-		if idx == CheckFunctionCCallLimit && fcd.Boolean != nil && *fcd.Boolean {
+		if idx == CheckFunctionCCallLimit && fcd.Boolean == nil {
 			errs = append(errs, "function c call limit")
 		}
 	}
