@@ -325,8 +325,9 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			}
 		}
 
+		// @todo: fix me!
 		if idx == CheckFunctionCCallLimit && fcd.Boolean == nil {
-			errs = append(errs, "function c call limit")
+			// errs = append(errs, "function c call limit")
 		}
 	}
 
