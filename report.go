@@ -107,7 +107,7 @@ type reportHandler struct {
 
 // Process function check data
 func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, lfcd []FunctionCheckData, identifier string) bool {
-	if len(lfcd) != CheckFunctionRestore {
+	if len(lfcd) != (CheckFunctionRestore + 1) {
 		cl.logger.Warn("invalid function check data length", slog.String("identifier", identifier), slog.Int("length", len(lfcd)))
 		return false
 	}
