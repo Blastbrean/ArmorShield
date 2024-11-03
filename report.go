@@ -106,9 +106,10 @@ type reportHandler struct {
 }
 
 // Process function check data
-func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, lfcd []FunctionCheckData, identifier string) error {
+func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, lfcd []FunctionCheckData, identifier string) bool {
 	if len(lfcd) != (CheckFunctionRestore + 1) {
-		return tracerr.New("function check data length mismatch")
+		cl.logger.Warn("invalid function check data length", slog.String("identifier", identifier), slog.Int("length", len(lfcd)))
+		return false
 	}
 
 	prp := map[int]interface{}{}
@@ -140,69 +141,69 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 		prp[idx] = val
 	}
 
-	cl.logger.Warn("processing function check data", slog.String("identifier", identifier), slog.Any("data", prp))
+	errs := []string{}
 
 	for idx := 0; idx < len(lfcd); idx++ {
 		fcd := lfcd[idx]
 		isz := strings.Contains(sh.hsh.bsh.exploitName, "Synapse Z")
 
 		if idx == CheckFunctionHook && fcd.Boolean != nil && *fcd.Boolean {
-			return tracerr.New("function is hooked")
+			errs = append(errs, "function is hooked")
 		}
 
 		if idx == CheckFunctionDebugGetInfo && fcd.GetInfo != nil {
 			if fcd.GetInfo.IsVararg != 1 {
-				return tracerr.New("function is not vararg")
+				errs = append(errs, "function is not vararg")
 			}
 
 			if fcd.GetInfo.Source != "=[C]" {
-				return tracerr.New("function source is not =[C]")
+				errs = append(errs, "function source is not =[C]")
 			}
 
 			if fcd.GetInfo.NumParams != 0 {
-				return tracerr.New("function number of parameters is not 0")
+				errs = append(errs, "function number of parameters is not 0")
 			}
 
 			if fcd.GetInfo.What != "C" {
-				return tracerr.New("function what is not C")
+				errs = append(errs, "function what is not C")
 			}
 
 			if fcd.GetInfo.ShortSrc != "[C]" {
-				return tracerr.New("function short source is not [C]")
+				errs = append(errs, "function short source is not [C]")
 			}
 
 			if fcd.GetInfo.Nups != 0 {
-				return tracerr.New("function number of upvalues is not 0")
+				errs = append(errs, "function number of upvalues is not 0")
 			}
 
 			if fcd.GetInfo.Name != fd.closureInfoName {
-				return tracerr.Errorf("function name '%s' does not match closure info name", fcd.GetInfo.Name)
+				errs = append(errs, "function name does not match closure info name")
 			}
 		}
 
 		if idx == CheckFunctionDebugInfo && fcd.Info != nil {
 			if fcd.Info.Source != "[C]" {
-				return tracerr.New("function source is not [C]")
+				errs = append(errs, "function source is not =[C]")
 			}
 
 			if fcd.Info.LineNumber != -1 {
-				return tracerr.New("function line number is not -1")
+				errs = append(errs, "function line number is not -1")
 			}
 
 			if fcd.Info.Unknown != 0 {
-				return tracerr.New("function unknown is not 0")
+				errs = append(errs, "function unknown is not 0")
 			}
 
 			if fcd.Info.ParamCount != true {
-				return tracerr.New("function parameter count is not true")
+				errs = append(errs, "function parameter count is not true")
 			}
 
 			if len(fcd.Info.FuncName) > 20 {
-				return tracerr.New("function name length is of invalid length")
+				errs = append(errs, "function name length is of invalid length")
 			}
 
 			if fcd.Info.FuncName != fd.closureInfoName {
-				return tracerr.Errorf("function name '%s' does not match closure info name", fcd.Info.FuncName)
+				errs = append(errs, "function name does not match closure info name")
 			}
 		}
 
@@ -211,44 +212,44 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			idx += 1
 
 			if *fcd.Boolean && fur.Byte != nil && *fur.Byte > 0 {
-				return tracerr.New("unexpected function upvalues")
+				errs = append(errs, "unexpected function upvalues")
 			}
 
 			if !*fcd.Boolean && fur.String != nil && !strings.Contains(*fur.String, "Lua function expected") && !strings.Contains(*fur.String, "invalid argument #1") {
-				return tracerr.New("unexpected function upvalues error")
+				errs = append(errs, "unexpected function upvalues error")
 			}
 		}
 
 		if idx == CheckFunctionProtos && fcd.Boolean != nil && *fcd.Boolean {
-			return tracerr.New("function has protos")
+			errs = append(errs, "function has protos")
 		}
 
 		if idx == CheckFunctionConstants && fcd.Boolean != nil && *fcd.Boolean {
-			return tracerr.New("function has constants")
+			errs = append(errs, "function has constants")
 		}
 
 		if idx == CheckFunctionEnvironment && fcd.Byte != nil && *fcd.Byte != 0 {
-			return tracerr.New("function has environment")
+			errs = append(errs, "function has environment")
 		}
 
 		if idx == CheckFunctionLuaClosure && fcd.Boolean != nil && *fcd.Boolean {
-			return tracerr.New("function is a lua closure")
+			errs = append(errs, "function is a lua closure")
 		}
 
 		if idx == CheckFunctionCClosure && fcd.Boolean != nil && !*fcd.Boolean {
-			return tracerr.New("function is not a c closure")
+			errs = append(errs, "function is not a c closure")
 		}
 
 		if idx == CheckFunctionSetEnvironment && fcd.Boolean != nil && *fcd.Boolean {
-			return tracerr.New("function has set environment")
+			errs = append(errs, "function has set environment")
 		}
 
 		if idx == CheckFunctionAddress && fcd.Boolean != nil && *fcd.Boolean {
-			return tracerr.New("function has mismatched address")
+			errs = append(errs, "function has mismatched address")
 		}
 
 		if idx == CheckFunctionPCallSuccess && fcd.Boolean != nil && *fcd.Boolean {
-			return tracerr.New("function pcall success")
+			errs = append(errs, "function pcall success")
 		}
 
 		if idx == CheckFunctionPCallResult && fcd.String != nil {
@@ -256,12 +257,12 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			matches := re.FindStringSubmatch(*fcd.String)
 
 			if len(matches) >= 1 || !fd.errorReturnCheck(*fcd.String) {
-				return tracerr.New("bad function pcall result")
+				errs = append(errs, "bad function pcall result")
 			}
 		}
 
 		if idx == CheckFunctionXPCallError && fcd.String != nil && !fd.errorReturnCheck(*fcd.String) {
-			return tracerr.New("bad function xpcall result")
+			errs = append(errs, "bad function xpcall result")
 		}
 
 		if fd.checkLuaCallLimit {
@@ -270,43 +271,45 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 				idx += 1
 
 				if flcr.String != nil && strings.Contains(*flcr.String, "stack overflow") {
-					return tracerr.New("bad function lua call stack")
+					errs = append(errs, "bad function lua call stack")
 				}
 			}
 		}
 
 		if idx == CheckFunctionIsExecutorClosure && fcd.Boolean != nil && *fcd.Boolean != fd.isExploitClosure {
-			return tracerr.New("function is executor closure")
+			errs = append(errs, "function is executor closure")
 		}
 
 		if fd.checkTrapTriggers {
 			if idx == CheckFunctionTrapTable && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function trap table triggered")
+				errs = append(errs, "function trap table triggered")
 			}
 
 			if idx == CheckFunctionTrapTableMetaTable && fcd.Boolean != nil && !*fcd.Boolean {
-				return tracerr.New("function trap table metatable does not exist")
+				errs = append(errs, "function trap table metatable does not exist")
 			}
 
 			if idx == CheckFunctionTrapTableWatermark && fcd.String != nil && *fcd.String != ArmorShieldWatermark {
-				return tracerr.New("function trap table watermark")
+				errs = append(errs, "function trap table watermark")
 			}
 
 			if idx == CheckFunctionTrapTableMismatch && fcd.Boolean != nil && *fcd.Boolean {
-				return tracerr.New("function trap table mismatch")
+				errs = append(errs, "function trap table mismatch")
 			}
 		}
 
 		if isz && idx == CheckFunctionRestore {
 			if fcd.String == nil || !strings.Contains(*fcd.String, "function is not hooked") {
-				return tracerr.New("function restore has no not hooked error")
+				errs = append(errs, "function restore has no not hooked error")
 			}
 		}
 	}
 
+	cl.logger.Warn("processed function check data", slog.String("identifier", identifier), slog.Any("errors", errs), slog.Any("data", prp), slog.Any("checkingLuaCallLimit", fd.checkLuaCallLimit))
+
 	fd.checkLuaCallLimit = false
 
-	return nil
+	return len(errs) <= 0
 }
 
 // Handle report
@@ -323,10 +326,10 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 	cl.receivedReports += 1
 	cl.logger.Warn("processing report", slog.Any("receivedReports", cl.receivedReports), slog.Any("otherData", od))
 
-	errpc := sh.processFunctionCheckData(cl, cl.pcall, br.FunctionDatas.PCall, "pcall")
-	errxc := sh.processFunctionCheckData(cl, cl.xpcall, br.FunctionDatas.XpCall, "xpcall")
-	errifh := sh.processFunctionCheckData(cl, cl.isFunctionHooked, br.FunctionDatas.IsFunctionHooked, "isfunctionhooked")
-	errls := sh.processFunctionCheckData(cl, cl.loadString, br.FunctionDatas.LoadString, "loadstring")
+	pcallOk := sh.processFunctionCheckData(cl, cl.pcall, br.FunctionDatas.PCall, "pcall")
+	xpcallOk := sh.processFunctionCheckData(cl, cl.xpcall, br.FunctionDatas.XpCall, "xpcall")
+	ifhOk := sh.processFunctionCheckData(cl, cl.isFunctionHooked, br.FunctionDatas.IsFunctionHooked, "isfunctionhooked")
+	lsOk := sh.processFunctionCheckData(cl, cl.loadString, br.FunctionDatas.LoadString, "loadstring")
 
 	if od.GenvLuaType != "table" {
 		return bsh.blacklistKey(cl, "global environment type wrong", slog.Any("genvLuaType", od.GenvLuaType))
@@ -374,20 +377,20 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 		}
 	}
 
-	if errpc != nil {
-		return bsh.blacklistKey(cl, "error processing pcall function check data", slog.Any("pcall", len(br.FunctionDatas.PCall)), slog.Any("error", errpc))
+	if !pcallOk {
+		return bsh.blacklistKey(cl, "error processing pcall function check data")
 	}
 
-	if errxc != nil {
-		return bsh.blacklistKey(cl, "error processing xpcall function check data", slog.Any("xpcall", len(br.FunctionDatas.XpCall)), slog.Any("error", errxc))
+	if !xpcallOk {
+		return bsh.blacklistKey(cl, "error processing xpcall function check data")
 	}
 
-	if errifh != nil {
-		return bsh.blacklistKey(cl, "error processing isfunctionhooked function check data", slog.Any("isfunctionhooked", len(br.FunctionDatas.IsFunctionHooked)), slog.Any("error", errifh))
+	if !ifhOk {
+		return bsh.blacklistKey(cl, "error processing isfunctionhooked function check data")
 	}
 
-	if errls != nil {
-		return bsh.blacklistKey(cl, "error processing loadstring function check data", slog.Any("loadstring", len(br.FunctionDatas.LoadString)), slog.Any("error", errls))
+	if !lsOk {
+		return bsh.blacklistKey(cl, "error processing loadstring function check data")
 	}
 
 	return nil
