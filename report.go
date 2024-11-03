@@ -25,6 +25,7 @@ const (
 	CheckFunctionPCallSuccess
 	CheckFunctionPCallResult
 	CheckFunctionXPCallError
+	CheckFunctionXPCallStack
 	CheckFunctionLuaCallSuccess
 	CheckFunctionLuaCallResult
 	CheckFunctionIsExecutorClosure
@@ -33,6 +34,7 @@ const (
 	CheckFunctionTrapTableWatermark
 	CheckFunctionTrapTableMismatch
 	CheckFunctionRestore
+	CheckFunctionCCallLimit
 )
 
 // Report data types
@@ -55,11 +57,12 @@ type FunctionDebugGetInfo struct {
 }
 
 type FunctionCheckData struct {
-	String  *string
-	Boolean *bool
-	Byte    *byte
-	GetInfo *FunctionDebugGetInfo
-	Info    *FunctionDebugInfo
+	String      *string
+	StringArray *[]string
+	Boolean     *bool
+	Byte        *byte
+	GetInfo     *FunctionDebugGetInfo
+	Info        *FunctionDebugInfo
 }
 
 type FunctionDatas struct {
@@ -265,6 +268,20 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			errs = append(errs, "bad function xpcall result")
 		}
 
+		if idx == CheckFunctionXPCallStack && fcd.StringArray != nil {
+			re := regexp.MustCompile(`:(\d+):`)
+
+			for _, s := range *fcd.StringArray {
+				matches := re.FindStringSubmatch(s)
+
+				if len(matches) <= 0 {
+					continue
+				}
+
+				errs = append(errs, "bad function xpcall stack")
+			}
+		}
+
 		if fd.checkLuaCallLimit {
 			if idx == CheckFunctionLuaCallSuccess && fcd.Boolean != nil && !*fcd.Boolean {
 				flcr := lfcd[idx+1]
@@ -298,10 +315,15 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			}
 		}
 
+		// @note: ??? - why is isz here?
 		if isz && idx == CheckFunctionRestore {
 			if fcd.String == nil || !strings.Contains(*fcd.String, "function is not hooked") {
 				errs = append(errs, "function restore has no not hooked error")
 			}
+		}
+
+		if idx == CheckFunctionCCallLimit && fcd.Boolean != nil && *fcd.Boolean {
+			errs = append(errs, "function c call limit")
 		}
 	}
 
