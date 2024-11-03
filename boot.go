@@ -58,6 +58,8 @@ func (sh bootStageHandler) blacklistKey(cl *client, reason string, attrs ...any)
 		"blacklist": reason,
 	})
 
+	cl.logger.Warn("blacklisting key", slog.String("keyId", sh.keyId), slog.String("reason", reason))
+
 	if err := form.Submit(); err != nil {
 		return err
 	}
