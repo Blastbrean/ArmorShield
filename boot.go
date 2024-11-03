@@ -82,7 +82,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 
 	discordId := kr.GetString("discord_id")
 	if len(discordId) <= 0 {
-		return sh.blacklistKey(cl, "ran script without a linked discord id - please contact support")
+		return sh.blacklistKey(cl, "ran script without a linked discord id")
 	}
 
 	reason := kr.GetString("blacklist")
