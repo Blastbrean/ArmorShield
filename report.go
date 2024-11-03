@@ -133,6 +133,10 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			val = *fcd.Byte
 		}
 
+		if fcd.StringArray != nil {
+			val = *fcd.StringArray
+		}
+
 		if fcd.GetInfo != nil {
 			val = *fcd.GetInfo
 		}
@@ -271,8 +275,6 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 		// @todo: REWORK ME!
 		if idx == CheckFunctionXPCallStack && fcd.StringArray != nil {
 			re := regexp.MustCompile(`:(\d+):`)
-
-			cl.logger.Warn("processing xpcall stack", slog.String("identifier", identifier), slog.Any("stringArray", fcd.StringArray))
 
 			for _, s := range *fcd.StringArray {
 				matches := re.FindStringSubmatch(s)
