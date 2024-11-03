@@ -177,7 +177,7 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			}
 
 			if fcd.GetInfo.Name != fd.closureInfoName {
-				errs = append(errs, "function name does not match closure info name")
+				errs = append(errs, "function get info name does not match closure info name")
 			}
 		}
 
@@ -203,7 +203,7 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			}
 
 			if fcd.Info.FuncName != fd.closureInfoName {
-				errs = append(errs, "function name does not match closure info name")
+				errs = append(errs, "function info name does not match closure info name")
 			}
 		}
 
