@@ -102,12 +102,11 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 
 	isz := strings.Contains(br.ExploitName, "Synapse Z")
 	isnihon := strings.Contains(br.ExploitName, "Nihon")
-	isseliware := strings.Contains(br.ExploitName, "Seliware")
 
 	ifh := ""
 	ls := ""
 
-	if isz || isnihon || isseliware {
+	if isz || isnihon {
 		ls = "loadstring"
 		ifh = "isfunctionhooked"
 	}

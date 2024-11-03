@@ -153,6 +153,7 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 	for idx := 0; idx < len(lfcd); idx++ {
 		fcd := lfcd[idx]
 		isz := strings.Contains(sh.hsh.bsh.exploitName, "Synapse Z")
+		isseliware := strings.Contains(sh.hsh.bsh.exploitName, "Seliware")
 
 		if idx == CheckFunctionHook && fcd.Boolean != nil && *fcd.Boolean {
 			errs = append(errs, "function is hooked")
@@ -183,7 +184,7 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 				errs = append(errs, "function number of upvalues is not 0")
 			}
 
-			if fcd.GetInfo.Name != fd.closureInfoName {
+			if !isseliware && fcd.GetInfo.Name != fd.closureInfoName {
 				errs = append(errs, "function get info name does not match closure info name")
 			}
 		}
@@ -209,7 +210,7 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 				errs = append(errs, "function name length is of invalid length")
 			}
 
-			if fcd.Info.FuncName != fd.closureInfoName {
+			if !isseliware && fcd.Info.FuncName != fd.closureInfoName {
 				errs = append(errs, "function info name does not match closure info name")
 			}
 		}
