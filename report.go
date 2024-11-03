@@ -268,21 +268,26 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			}
 		}
 
-		if idx == CheckFunctionXPCallError && fcd.String != nil && !fd.errorReturnCheck(*fcd.String) {
-			errs = append(errs, "bad function xpcall result")
+		if idx == CheckFunctionXPCallError && fcd.String != nil {
+			re := regexp.MustCompile(`:(\d+):`)
+			matches := re.FindStringSubmatch(*fcd.String)
+
+			if len(matches) >= 1 || !fd.errorReturnCheck(*fcd.String) {
+				errs = append(errs, "bad function xpcall result")
+			}
 		}
 
-		// @todo: REWORK ME!
 		if idx == CheckFunctionXPCallStack && fcd.StringArray != nil {
-			re := regexp.MustCompile(`:(\d+):`)
+			xpcallStackOk := false
 
 			for _, s := range *fcd.StringArray {
-				matches := re.FindStringSubmatch(s)
-
-				if len(matches) <= 0 {
-					continue
+				if s == ArmorShieldWatermark {
+					xpcallStackOk = true
+					break
 				}
+			}
 
+			if !xpcallStackOk {
 				// errs = append(errs, "bad function xpcall stack")
 			}
 		}
@@ -327,7 +332,6 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			}
 		}
 
-		// @todo: fix me!
 		if idx == CheckFunctionCCallLimit && fcd.Boolean == nil {
 			// errs = append(errs, "function c call limit")
 		}
