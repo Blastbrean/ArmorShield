@@ -269,10 +269,7 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 		}
 
 		if idx == CheckFunctionXPCallError && fcd.String != nil {
-			re := regexp.MustCompile(`:(\d+):`)
-			matches := re.FindStringSubmatch(*fcd.String)
-
-			if len(matches) >= 1 || !fd.errorReturnCheck(*fcd.String) {
+			if !fd.errorReturnCheck(*fcd.String) {
 				errs = append(errs, "bad function xpcall result")
 			}
 		}
