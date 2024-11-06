@@ -25,7 +25,7 @@ const (
 	CheckFunctionPCallSuccess
 	CheckFunctionPCallResult
 	CheckFunctionXPCallError
-	CheckFunctionXPCallStack
+	CheckFunctionCoroutineResult
 	CheckFunctionLuaCallSuccess
 	CheckFunctionLuaCallResult
 	CheckFunctionIsExecutorClosure
@@ -275,18 +275,12 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 			}
 		}
 
-		if idx == CheckFunctionXPCallStack && fcd.StringArray != nil {
-			xpcallStackOk := false
+		if idx == CheckFunctionCoroutineResult && fcd.String != nil {
+			re := regexp.MustCompile(`:(\d+):`)
+			matches := re.FindStringSubmatch(*fcd.String)
 
-			for _, s := range *fcd.StringArray {
-				if s == ArmorShieldWatermark {
-					xpcallStackOk = true
-					break
-				}
-			}
-
-			if !xpcallStackOk {
-				// errs = append(errs, "bad function xpcall stack")
+			if len(matches) >= 1 || !fd.errorReturnCheck(*fcd.String) {
+				errs = append(errs, "bad function coroutine result")
 			}
 		}
 
@@ -331,7 +325,7 @@ func (sh reportHandler) processFunctionCheckData(cl *client, fd *functionData, l
 		}
 
 		if idx == CheckFunctionCCallLimit && fcd.Boolean == nil {
-			// errs = append(errs, "function c call limit")
+			errs = append(errs, "function c call limit")
 		}
 	}
 
