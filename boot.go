@@ -48,6 +48,11 @@ type bootStageHandler struct {
 
 // Blacklist key
 func (sh bootStageHandler) blacklistKey(cl *client, reason string, attrs ...any) error {
+	if !cl.ls.testingMode {
+		cl.logger.Warn("key blacklist in testing mode", slog.String("keyId", sh.keyId), slog.String("reason", reason))
+		return nil
+	}
+
 	kr, err := cl.app.Dao().FindRecordById("keys", sh.keyId)
 	if err != nil {
 		return cl.fail("failed to get key data", err)
@@ -81,18 +86,17 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	}
 
 	discordId := kr.GetString("discord_id")
-	if len(discordId) <= 0 {
+	if !cl.ls.testingMode && len(discordId) <= 0 {
 		return sh.blacklistKey(cl, "ran script without a linked discord id")
 	}
 
 	reason := kr.GetString("blacklist")
-	if len(reason) > 0 {
+	if !cl.ls.testingMode && len(reason) > 0 {
 		return cl.drop("key is blacklisted", slog.String("blacklist", reason))
 	}
 
 	expiry, err := types.ParseDateTime(kr.Get("expiry"))
-
-	if err != nil && expiry.Time().Before(cl.baseTimestamp) {
+	if !cl.ls.testingMode && err != nil && expiry.Time().Before(cl.baseTimestamp) {
 		return cl.drop("key is expired", slog.String("expiry", expiry.String()), slog.String("baseTimestamp", cl.baseTimestamp.String()))
 	}
 
@@ -169,7 +173,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 
 	cl.currentStage = ClientStageHandshake
 	cl.bootStageHandler = &sh
-	cl.stageHandler = handshakeHandler{hmacKey: [32]byte{}, aesKey: [32]byte{}, bsh: sh}
+	cl.stageHandler = handshakeHandler{hmacKey: [32]byte{}, rc4Key: [16]byte{}, bsh: sh}
 	cl.sendMessage(Message{Id: PacketIdBootstrap, Data: BootResponse{
 		BaseTimestamp: ubt,
 		SubId:         cl.subId,

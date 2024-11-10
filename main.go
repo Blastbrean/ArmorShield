@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/pocketbase/pocketbase"
@@ -14,6 +15,16 @@ import (
 func main() {
 	app := pocketbase.New()
 
+	var testingMode bool
+	app.RootCmd.PersistentFlags().BoolVar(
+		&testingMode,
+		"testingMode",
+		false,
+		"Run the loader in testing mode and prevent blacklist(s) from being enforced.",
+	)
+
+	app.RootCmd.ParseFlags(os.Args[1:])
+
 	ls := loaderServer{
 		app:                   app,
 		logger:                app.Logger().WithGroup("ls"),
@@ -23,6 +34,7 @@ func main() {
 		afterEstablishedBytes: 200000,
 		broadcastLimiter:      rate.NewLimiter(rate.Every(time.Millisecond*100), 8),
 		clients:               make(map[*client]struct{}),
+		testingMode:           testingMode,
 	}
 
 	app.OnRecordAfterUpdateRequest("keys").Add(func(e *core.RecordUpdateEvent) error {
@@ -53,6 +65,10 @@ func main() {
 	})
 
 	app.OnBeforeServe().Add(infailableHandler(func(se *core.ServeEvent) {
+		if ls.testingMode {
+			app.Logger().Warn("Server is running with testing mode enabled.")
+		}
+
 		se.Router.GET("/subscribe", infailableHandler(ls.subscribeHandler))
 	}))
 

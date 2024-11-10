@@ -1,17 +1,15 @@
 package main
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/rc4"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"log/slog"
 
 	"github.com/shamaton/msgpack/v2"
-	"github.com/zenazn/pkcs7pad"
 	"github.com/ztrue/tracerr"
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/hkdf"
@@ -30,7 +28,7 @@ type HandshakeResponse struct {
 // Handshake handler
 type handshakeHandler struct {
 	hmacKey [32]byte
-	aesKey  [32]byte
+	rc4Key  [16]byte
 	bsh     bootStageHandler
 }
 
@@ -43,57 +41,32 @@ func (sh handshakeHandler) marshalMessage(cl *client, v interface{}) ([]byte, er
 
 	cl.logger.Info("marshal message", slog.Any("len", len(da)))
 
-	iv := make([]byte, aes.BlockSize)
-	_, err = rand.Read(iv)
+	cipher, err := rc4.NewCipher(sh.rc4Key[:])
 	if err != nil {
 		return da, tracerr.Wrap(err)
 	}
 
-	block, err := aes.NewCipher(sh.aesKey[:])
-	if err != nil {
-		return da, tracerr.Wrap(err)
-	}
-
-	pb := pkcs7pad.Pad(da, aes.BlockSize)
-	eb := make([]byte, len(pb))
-
-	mode := cipher.NewCBCEncrypter(block, iv)
-	mode.CryptBlocks(eb, pb)
+	ct := make([]byte, len(da))
+	cipher.XORKeyStream(ct, da)
 
 	ts := make([]byte, 8)
 	binary.LittleEndian.PutUint64(ts, uint64(cl.baseTimestamp.Unix()))
 
 	mac := hmac.New(sha256.New, sh.hmacKey[:])
-	mac.Write(eb)
+	mac.Write(ct)
 	mac.Write([]byte{VersionSWS100})
 	mac.Write(ts)
 	mac.Write(cl.subId[:])
 
-	fin := append(mac.Sum(nil), iv[:]...)
-	fin = append(fin, eb[:]...)
-
-	return fin, nil
+	return append(mac.Sum(nil), ct[:]...), nil
 }
 
 // Unmarshal message
 func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface{}) error {
 	cl.logger.Info("unmarshal message", slog.Any("len", len(data)))
 
-	if len(data) < 48 {
-		return tracerr.New("message too short")
-	}
-
 	em := data[:32]
-	iv := data[32:48]
-	ct := data[48:]
-
-	if len(ct) < aes.BlockSize {
-		return tracerr.New("cipher text too short")
-	}
-
-	if len(ct)%aes.BlockSize != 0 {
-		return tracerr.New("invalid cipher text")
-	}
+	ct := data[32:]
 
 	ts := make([]byte, 8)
 	binary.LittleEndian.PutUint64(ts, uint64(cl.baseTimestamp.Unix()))
@@ -108,21 +81,14 @@ func (sh handshakeHandler) unmarshalMessage(cl *client, data []byte, v interface
 		return tracerr.New("mac signature verification failed")
 	}
 
-	block, err := aes.NewCipher(sh.aesKey[:])
+	cipher, err := rc4.NewCipher(sh.rc4Key[:])
 	if err != nil {
-		return err
+		return tracerr.Wrap(err)
 	}
 
-	mode := cipher.NewCBCDecrypter(block, iv)
-	mode.CryptBlocks(ct, ct)
+	cipher.XORKeyStream(ct, ct)
 
-	upct, err := pkcs7pad.Unpad(ct)
-
-	if err == nil {
-		ct = upct
-	}
-
-	if err = msgpack.Unmarshal(ct, &v); err != nil {
+	if err := msgpack.Unmarshal(ct, &v); err != nil {
 		cl.logger.Warn("handshake unmarshal message failed", slog.Any("pb", base64.RawStdEncoding.EncodeToString(ct)))
 		return tracerr.Wrap(err)
 	}
@@ -188,8 +154,8 @@ func (sh handshakeHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	aesHdkf := hkdf.New(sha256.New, shk, st, []byte{0x00})
-	_, err = aesHdkf.Read(sh.aesKey[:])
+	rc4Hdkf := hkdf.New(sha256.New, shk, st, []byte{0x00})
+	_, err = rc4Hdkf.Read(sh.rc4Key[:])
 	if err != nil {
 		return tracerr.Wrap(err)
 	}

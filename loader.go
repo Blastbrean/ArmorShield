@@ -48,6 +48,9 @@ type loaderServer struct {
 
 	// The pocketbase app.
 	app *pocketbase.PocketBase
+
+	// Testing mode.
+	testingMode bool
 }
 
 // This function accepts the WebSocket connection and then adds it to the list of all clients.
@@ -214,6 +217,10 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 		readerClosed: make(chan struct{}),
 
 		getRemoteAddr: func() string {
+			if cl.ls.testingMode {
+				return "69.420.69.420"
+			}
+
 			strat, _ := realclientip.NewRightmostNonPrivateStrategy("X-Forwarded-For")
 			return strat.ClientIP(r.Header, r.RemoteAddr)
 		},
@@ -222,7 +229,7 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 			mu.Lock()
 			defer mu.Unlock()
 
-			attrs := append([]any{slog.Any("reason", reason), slog.Any("traceback", tracerr.StackTrace(err))}, args...)
+			attrs := append([]any{slog.Any("err", err), slog.Any("reason", reason), slog.Any("traceback", tracerr.StackTrace(err))}, args...)
 			cl.logger.Error("failed connection", attrs...)
 
 			if c != nil {
