@@ -180,8 +180,8 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		slog.String("discordId", discordId),
 		slog.String("keyId", br.KeyId),
 		slog.String("exploitName", br.ExploitName),
-		slog.String("expiry", expiry.String()),
-		slog.String("baseTimestamp", cl.baseTimestamp.String()),
+		slog.Int("expiry", expiry.Time().Second()),
+		slog.Int("baseTimestamp", cl.baseTimestamp.Second()),
 	)
 
 	if err != nil {
