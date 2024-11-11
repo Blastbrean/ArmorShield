@@ -77,7 +77,9 @@ func (sh loadStageHandler) handlePacket(cl *client, pk Packet) error {
 		return err
 	}
 
+	cl.logger.Warn("loaded script", slog.Int("size", b.Len()))
 	cl.currentStage = ClientStageLoad
+
 	sh.hsh.sendMessage(cl, Message{Id: pk.Id, Data: LoadResponse{
 		Script: b.String(),
 	}})
