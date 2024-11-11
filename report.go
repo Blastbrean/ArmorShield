@@ -348,7 +348,19 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 	od := br.OtherData
 
 	cl.receivedReports += 1
-	cl.logger.Warn("processing report", slog.Any("receivedReports", cl.receivedReports), slog.Any("otherData", od))
+	cl.logger.Warn("processing report", slog.Any("receivedReports", cl.receivedReports), slog.Group("otherData",
+		slog.Any("renvLuaType", od.RenvLuaType),
+		slog.Any("renvMetatable", od.RenvMetatable),
+		slog.Any("genvLuaType", od.GenvLuaType),
+		slog.Any("stringMetatableLuaType", od.StringMetatableLuaType),
+		slog.Any("stringTableLuaType", od.StringTableLuaType),
+		slog.Any("stringMetatableIndex", od.StringMetatableIndex),
+		slog.Any("stringMetatableAddress", od.StringMetatableAddress),
+		slog.Any("stringIndexTableAddress", od.StringIndexTableAddress),
+		slog.Any("stringMetatableTableIndexMatch", od.StringMetatableTableIndexMatch),
+		slog.Any("logHistory", od.LogHistory),
+		slog.Any("executorClosures", od.ExecutorClosures),
+	))
 
 	pcallOk := sh.processFunctionCheckData(cl, cl.pcall, br.FunctionDatas.PCall, "pcall")
 	xpcallOk := sh.processFunctionCheckData(cl, cl.xpcall, br.FunctionDatas.XpCall, "xpcall")
