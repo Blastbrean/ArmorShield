@@ -199,7 +199,7 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 	cl = &client{
 		ls:         ls,
 		app:        ls.app,
-		logger:     ls.app.Logger().WithGroup(subId.String()),
+		logger:     ls.logger.With(slog.String("subscription_id", subId.String())),
 		dropTicker: time.NewTicker(1 * time.Minute),
 
 		subId:         subId,
