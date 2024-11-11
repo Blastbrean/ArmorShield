@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -105,7 +106,17 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 		}
 	}
 
-	discordwebhook.SendEmbed(pr.GetString("alertWebhook"), embed)
+	hook := discordwebhook.Hook{
+		Content: "@everyone",
+		Embeds:  []discordwebhook.Embed{embed},
+	}
+
+	payload, err := json.Marshal(hook)
+	if err != nil {
+		return
+	}
+
+	discordwebhook.ExecuteWebhook(pr.GetString("alertWebhook"), payload)
 }
 
 // Blacklist key
