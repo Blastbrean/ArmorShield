@@ -159,12 +159,20 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		return cl.drop("key is blacklisted", slog.String("blacklist", reason))
 	}
 
-	expiry, err := types.ParseDateTime(kr.Get("expiry"))
+	expiry, err := types.ParseDateTime(kr.GetString("expiry"))
 	if !cl.ls.testingMode && err != nil && expiry.Time().Before(cl.baseTimestamp) {
 		return cl.drop("key is expired", slog.String("expiry", expiry.String()), slog.String("baseTimestamp", cl.baseTimestamp.String()))
 	}
 
-	cl.logger.Warn("booting subscription", slog.String("discordId", discordId), slog.String("keyId", br.KeyId), slog.String("exploitName", br.ExploitName))
+	cl.logger.Warn(
+		"booting subscription",
+		slog.String("discordId", discordId),
+		slog.String("keyId", br.KeyId),
+		slog.String("exploitName", br.ExploitName),
+		slog.String("expiry", expiry.String()),
+		slog.String("expiryErr", err.Error()),
+		slog.String("baseTimestamp", cl.baseTimestamp.String()),
+	)
 
 	ubt := uint64(cl.baseTimestamp.Unix())
 
