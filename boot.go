@@ -170,9 +170,13 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		return cl.drop("key is blacklisted", slog.String("blacklist", reason))
 	}
 
-	expiry, err := types.ParseDateTime(kr.GetString("expiry"))
-	if !cl.ls.testingMode && err == nil && expiry.Time().Before(cl.baseTimestamp) {
-		return cl.drop("key is expired", slog.String("expiry", expiry.String()), slog.String("baseTimestamp", cl.baseTimestamp.String()))
+	expiryString := kr.GetString("expiry")
+	expiry, err := types.ParseDateTime(expiryString)
+
+	if len(expiryString) > 0 {
+		if !cl.ls.testingMode && err == nil && expiry.Time().Before(cl.baseTimestamp) {
+			return cl.drop("key is expired", slog.String("expiry", expiry.String()), slog.String("baseTimestamp", cl.baseTimestamp.String()))
+		}
 	}
 
 	cl.logger.Warn(
