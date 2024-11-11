@@ -12,6 +12,7 @@ import (
 
 // Analytics information - external identifiers scraping everything they can get.
 // Useful for more closely determining who a user is.
+// Parsed by our internal logging system :)
 type AnalyticsInfo struct {
 	SystemLocaleId      string
 	OutputDevices       []string
@@ -170,7 +171,19 @@ func checkBoloSessionsIsGood(cl *client, si *SessionInfo, bolo_sessions []*model
 // Expect identifiers
 func expectIdentifiers(cl *client, en string, im *IdentifyMessage, kr *models.Record) (*models.Record, *models.Record, *models.Record, *models.Record, error) {
 	ai := im.KeyInfo.AnalyticsInfo
-	cl.logger.Info("current analytics information", slog.Any("analyticsInfo", ai))
+
+	cl.logger.Info("current analytics information", slog.Group("analyticsInfo",
+		slog.String("systemLocaleId", ai.SystemLocaleId),
+		slog.Any("outputDevices", ai.OutputDevices),
+		slog.Any("inputDevices", ai.InputDevices),
+		slog.Bool("hasHyperion", ai.HasHyperion),
+		slog.Bool("hasTouchscreen", ai.HasTouchscreen),
+		slog.Bool("hasGyroscope", ai.HasGyroscope),
+		slog.Int64("gpuMemory", ai.GpuMemory),
+		slog.String("timezone", ai.Timezone),
+		slog.String("region", ai.Region),
+		slog.Bool("daylightSavingsTime", ai.DaylightSavingsTime),
+	))
 
 	sbr, err := createNewRecord(cl, "subscriptions", map[string]any{
 		"key": kr.Id,
