@@ -171,7 +171,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	}
 
 	expiry, err := types.ParseDateTime(kr.GetString("expiry"))
-	if !cl.ls.testingMode && err != nil && expiry.Time().Before(cl.baseTimestamp) {
+	if !cl.ls.testingMode && err == nil && expiry.Time().Before(cl.baseTimestamp) {
 		return cl.drop("key is expired", slog.String("expiry", expiry.String()), slog.String("baseTimestamp", cl.baseTimestamp.String()))
 	}
 
@@ -180,8 +180,8 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		slog.String("discordId", discordId),
 		slog.String("keyId", br.KeyId),
 		slog.String("exploitName", br.ExploitName),
-		slog.Int("expiry", expiry.Time().Second()),
-		slog.Int("baseTimestamp", cl.baseTimestamp.Second()),
+		slog.String("expiry", expiry.String()),
+		slog.String("baseTimestamp", cl.baseTimestamp.String()),
 	)
 
 	if err != nil {
