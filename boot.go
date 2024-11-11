@@ -1,9 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
+	discordwebhook "github.com/bensch777/discord-webhook-golang"
 	"github.com/pocketbase/pocketbase/forms"
 	"github.com/pocketbase/pocketbase/tools/types"
 	"github.com/shamaton/msgpack/v2"
@@ -46,6 +49,65 @@ type bootStageHandler struct {
 	exploitName string
 }
 
+// Alert types
+const (
+	AlertTypeBolo = iota
+	AlertTypeBlacklist
+)
+
+// Send alert to WebSocket
+func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
+	kr, err := cl.app.Dao().FindRecordById("keys", sh.keyId)
+	if err != nil {
+		return
+	}
+
+	if errs := cl.app.Dao().ExpandRecord(kr, []string{"project"}, nil); len(errs) > 0 {
+		return
+	}
+
+	pr := kr.ExpandedOne("project")
+	if pr == nil {
+		return
+	}
+
+	cl.logger.Warn("sending websocket alert", slog.Int("alertType", alertType))
+
+	embed := discordwebhook.Embed{}
+
+	if alertType == AlertTypeBolo {
+		embed = discordwebhook.Embed{
+			Title:       "Automated 'Be On The Lookout' Alert",
+			Description: "[Please manually check the logs of the key and subscription ID through this URL](http://31.220.103.151:3000).",
+			Color:       0xFAFF00,
+			Timestamp:   time.Now(),
+			Footer: discordwebhook.Footer{
+				Text: fmt.Sprintf("Subscription ID: '%s'", cl.subId.String()),
+			},
+			Author: discordwebhook.Author{
+				Name: fmt.Sprintf("PB Key ID (%s)", sh.keyId),
+			},
+		}
+	}
+
+	if alertType == AlertTypeBlacklist {
+		embed = discordwebhook.Embed{
+			Title:       "Automated 'Blacklist Key' Alert",
+			Description: "[Please manually check the logs of the key and subscription ID through this URL](http://31.220.103.151:3000).",
+			Color:       0xFAFF00,
+			Timestamp:   time.Now(),
+			Footer: discordwebhook.Footer{
+				Text: fmt.Sprintf("Subscription ID: '%s'", cl.subId.String()),
+			},
+			Author: discordwebhook.Author{
+				Name: fmt.Sprintf("PB Key ID (%s)", sh.keyId),
+			},
+		}
+	}
+
+	discordwebhook.SendEmbed(pr.GetString("alertWebhook"), embed)
+}
+
 // Blacklist key
 func (sh bootStageHandler) blacklistKey(cl *client, reason string, attrs ...any) error {
 	if !cl.ls.testingMode {
@@ -64,6 +126,8 @@ func (sh bootStageHandler) blacklistKey(cl *client, reason string, attrs ...any)
 	})
 
 	cl.logger.Warn("blacklisting key", slog.String("keyId", sh.keyId), slog.String("reason", reason))
+
+	sh.sendAlert(cl, AlertTypeBlacklist)
 
 	if err := form.Submit(); err != nil {
 		return err

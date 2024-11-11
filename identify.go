@@ -137,7 +137,7 @@ func getWorkspaceScanMatchPercentage(ws []string, ows []string) float64 {
 }
 
 // Check BOLO sessions
-func checkBoloSessions(cl *client, si *SessionInfo, bolo_sessions []*models.Record) {
+func checkBoloSessionsIsGood(cl *client, si *SessionInfo, bolo_sessions []*models.Record) bool {
 	for _, bolo_session := range bolo_sessions {
 		var swp float64
 		var ws []string
@@ -160,9 +160,11 @@ func checkBoloSessions(cl *client, si *SessionInfo, bolo_sessions []*models.Reco
 		}
 
 		if sm || sw {
-			break
+			return false
 		}
 	}
+
+	return true
 }
 
 // Expect identifiers
@@ -275,6 +277,8 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 	// @todo: BOLO:
 	// check if IP is using a VPN / Proxy / Mobile connection (make it so managers can clear this)
 
+	ok := true
+
 	bolo_ip, err := cl.app.Dao().FindFirstRecordByFilter(
 		"fingerprint",
 		"key.bolo != false && (ipAddress = {:ipAddress})",
@@ -283,6 +287,7 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 
 	if bolo_ip != nil && err == nil {
 		cl.logger.Info("user IP is matching with BOLO user", slog.Any("fingerprint", bolo_ip.GetId()))
+		ok = false
 	}
 
 	si := &im.SubInfo.SessionInfo
@@ -295,6 +300,7 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 
 	if bolo_session != nil && err == nil {
 		cl.logger.Info("user session is matching with BOLO user", slog.Any("session", bolo_session.GetId()))
+		ok = false
 	}
 
 	bolo_join, err := cl.app.Dao().FindFirstRecordByFilter(
@@ -305,6 +311,7 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 
 	if bolo_join != nil && err == nil {
 		cl.logger.Info("user join is matching with BOLO user", slog.Any("join", bolo_join.GetId()))
+		ok = false
 	}
 
 	bolo_sessions, err := cl.app.Dao().FindRecordsByFilter(
@@ -314,7 +321,11 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 	)
 
 	if err == nil {
-		checkBoloSessions(cl, &im.SubInfo.SessionInfo, bolo_sessions)
+		ok = checkBoloSessionsIsGood(cl, &im.SubInfo.SessionInfo, bolo_sessions)
+	}
+
+	if !ok {
+		sh.hsh.bsh.sendAlert(cl, AlertTypeBolo)
 	}
 
 	cl.currentStage = ClientStageIdentify
