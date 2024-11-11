@@ -76,13 +76,13 @@ func (ls *loaderServer) subscribeHandler(ctx echo.Context) {
 }
 
 // This listens for new packets sent by the client and handles them.
-// If we don't recieve a new message within 15 seconds, we'll drop the client.
+// If we don't recieve a new message within a minute, we'll drop the client.
 func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.Conn) error {
 	defer c.CloseNow()
 	defer close(cl.readerClosed)
 
 	for {
-		ctx, cancel := context.WithTimeout(ctx, time.Second*15)
+		ctx, cancel := context.WithTimeout(ctx, time.Second*60)
 		defer cancel()
 
 		_, rr, err := c.Reader(ctx)
@@ -137,10 +137,10 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 }
 
 // This listens for new messages written to the buffer and writes them to the WebSocket.
-// If we aren't done within 30 seconds, we'll drop the client.
+// If we aren't done within a minute, we'll drop the client.
 func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.Conn) error {
 	for {
-		ctx, cancel := context.WithTimeout(ctx, time.Second*30)
+		ctx, cancel := context.WithTimeout(ctx, time.Second*60)
 		defer cancel()
 
 		err := error(nil)
@@ -161,10 +161,10 @@ func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.
 }
 
 // This contionously perform actions based on tickers.
-// If nothing happens within 60 seconds, we'll drop the client.
+// If nothing happens within 2 minutes, we'll drop the client.
 func (ls *loaderServer) timePump(ctx context.Context, cl *client, _ *websocket.Conn) error {
 	for {
-		ctx, cancel := context.WithTimeout(ctx, time.Second*60)
+		ctx, cancel := context.WithTimeout(ctx, time.Second*120)
 		defer cancel()
 
 		select {
