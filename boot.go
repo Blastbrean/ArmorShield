@@ -181,9 +181,12 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		slog.String("keyId", br.KeyId),
 		slog.String("exploitName", br.ExploitName),
 		slog.String("expiry", expiry.String()),
-		slog.String("expiryErr", err.Error()),
 		slog.String("baseTimestamp", cl.baseTimestamp.String()),
 	)
+
+	if err != nil {
+		cl.logger.Warn("expiry parse error", slog.String("err", err.Error()))
+	}
 
 	ubt := uint64(cl.baseTimestamp.Unix())
 
