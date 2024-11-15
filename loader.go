@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -292,7 +293,10 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 
 	cl.logger.Info("client subscribed with IP"+" "+cl.getRemoteAddr(), slog.Uint64("timestamp", uint64(cl.baseTimestamp.Unix())))
 
-	cl.drop("dropped for testing")
+	err = cl.drop("dropped for testing")
+	if err != nil {
+		log.Print("failed to drop client", err)
+	}
 
 	return cl, errs.Wait()
 }
