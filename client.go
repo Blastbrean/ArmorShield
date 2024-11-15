@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
-	"log"
 	"log/slog"
 	"time"
 
@@ -107,13 +105,9 @@ func (cl *client) writePacket(ctx context.Context, c *websocket.Conn, pk Packet)
 		return tracerr.Wrap(err)
 	}
 
-	hex := hex.EncodeToString(ser)
-
 	cl.logger.Warn("writing packet", slog.Int("id", int(pk.Id)))
 
-	log.Print([]byte(hex), hex)
-
-	return c.Write(ctx, websocket.MessageText, []byte(hex))
+	return c.Write(ctx, websocket.MessageBinary, ser)
 }
 
 // This function will close the websocket connection and write a close packet.
