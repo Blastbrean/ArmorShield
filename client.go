@@ -107,7 +107,7 @@ func (cl *client) writePacket(ctx context.Context, c *websocket.Conn, pk Packet)
 
 	cl.logger.Warn("writing packet", slog.Int("id", int(pk.Id)))
 
-	return c.Write(ctx, websocket.MessageText, ser)
+	return c.Write(ctx, websocket.MessageBinary, ser)
 }
 
 // This function will close the websocket connection and write a close packet.
