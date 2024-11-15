@@ -79,7 +79,7 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 	if alertType == AlertTypeBolo {
 		embed = discordwebhook.Embed{
 			Title:       "Automated 'Be On The Lookout' Alert",
-			Description: "[Please manually check the logs of the key and subscription ID through this URL](http://31.220.103.151:3000).",
+			Description: "[Please manually check the logs of the key and subscription ID through this URL](https://armorshield.online:3000).",
 			Color:       0xFAFF00,
 			Timestamp:   time.Now(),
 			Footer: discordwebhook.Footer{
@@ -94,7 +94,7 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 	if alertType == AlertTypeBlacklist {
 		embed = discordwebhook.Embed{
 			Title:       "Automated 'Blacklist Key' Alert",
-			Description: "[Please manually check the logs of the key and subscription ID through this URL](http://31.220.103.151:3000).",
+			Description: "[Please manually check the logs of the key and subscription ID through this URL](https://armorshield.online:3000).",
 			Color:       0xFAFF00,
 			Timestamp:   time.Now(),
 			Footer: discordwebhook.Footer{
@@ -192,7 +192,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		cl.logger.Warn("expiry parse error", slog.String("err", err.Error()))
 	}
 
-	//ubt := uint64(cl.baseTimestamp.Unix())
+	ubt := uint64(cl.baseTimestamp.Unix())
 
 	isz := strings.Contains(br.ExploitName, "Synapse Z")
 	isnihon := strings.Contains(br.ExploitName, "Nihon")
@@ -264,18 +264,16 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	cl.currentStage = ClientStageHandshake
 	cl.bootStageHandler = &sh
 	cl.stageHandler = handshakeHandler{hmacKey: [32]byte{}, rc4Key: [16]byte{}, bsh: sh}
-	/*
-		cl.sendMessage(Message{Id: PacketIdBootstrap, Data: BootResponse{
-			BaseTimestamp: ubt,
-			SubId:         cl.subId,
-			ClientFunctionDatas: ClientFunctionDatas{
-				PCall:            ClientFunctionData{ClosureInfoName: cl.pcall.closureInfoName, NormalArguments: cl.pcall.normalArguments, ErrorArguments: cl.pcall.errorArguments},
-				XpCall:           ClientFunctionData{ClosureInfoName: cl.xpcall.closureInfoName, NormalArguments: cl.xpcall.normalArguments, ErrorArguments: cl.xpcall.errorArguments},
-				IsFunctionHooked: ClientFunctionData{ClosureInfoName: cl.isFunctionHooked.closureInfoName, NormalArguments: cl.isFunctionHooked.normalArguments, ErrorArguments: cl.isFunctionHooked.errorArguments},
-				LoadString:       ClientFunctionData{ClosureInfoName: cl.loadString.closureInfoName, NormalArguments: cl.loadString.normalArguments, ErrorArguments: cl.loadString.errorArguments},
-			},
-		}})
-	*/
+	cl.sendMessage(Message{Id: PacketIdBootstrap, Data: BootResponse{
+		BaseTimestamp: ubt,
+		SubId:         cl.subId,
+		ClientFunctionDatas: ClientFunctionDatas{
+			PCall:            ClientFunctionData{ClosureInfoName: cl.pcall.closureInfoName, NormalArguments: cl.pcall.normalArguments, ErrorArguments: cl.pcall.errorArguments},
+			XpCall:           ClientFunctionData{ClosureInfoName: cl.xpcall.closureInfoName, NormalArguments: cl.xpcall.normalArguments, ErrorArguments: cl.xpcall.errorArguments},
+			IsFunctionHooked: ClientFunctionData{ClosureInfoName: cl.isFunctionHooked.closureInfoName, NormalArguments: cl.isFunctionHooked.normalArguments, ErrorArguments: cl.isFunctionHooked.errorArguments},
+			LoadString:       ClientFunctionData{ClosureInfoName: cl.loadString.closureInfoName, NormalArguments: cl.loadString.normalArguments, ErrorArguments: cl.loadString.errorArguments},
+		},
+	}})
 
 	return nil
 }
