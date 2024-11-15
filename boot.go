@@ -192,7 +192,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		cl.logger.Warn("expiry parse error", slog.String("err", err.Error()))
 	}
 
-	ubt := uint64(cl.baseTimestamp.Unix())
+	//ubt := uint64(cl.baseTimestamp.Unix())
 
 	isz := strings.Contains(br.ExploitName, "Synapse Z")
 	isnihon := strings.Contains(br.ExploitName, "Nihon")
