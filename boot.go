@@ -79,7 +79,7 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 	if alertType == AlertTypeBolo {
 		embed = discordwebhook.Embed{
 			Title:       "Automated 'Be On The Lookout' Alert",
-			Description: "[Please manually check the logs of the key and subscription ID through this URL](https://armorshield.online:3000).",
+			Description: "[Please manually check the logs of the key and subscription ID through this URL](https://armorshield.online:420).",
 			Color:       0xFAFF00,
 			Timestamp:   time.Now(),
 			Footer: discordwebhook.Footer{
@@ -94,7 +94,7 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 	if alertType == AlertTypeBlacklist {
 		embed = discordwebhook.Embed{
 			Title:       "Automated 'Blacklist Key' Alert",
-			Description: "[Please manually check the logs of the key and subscription ID through this URL](https://armorshield.online:3000).",
+			Description: "[Please manually check the logs of the key and subscription ID through this URL](https://armorshield.online:420).",
 			Color:       0xFAFF00,
 			Timestamp:   time.Now(),
 			Footer: discordwebhook.Footer{
