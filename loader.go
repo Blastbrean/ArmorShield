@@ -292,10 +292,6 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 
 	cl.logger.Info("client subscribed with IP"+" "+cl.getRemoteAddr(), slog.Uint64("timestamp", uint64(cl.baseTimestamp.Unix())))
 
-	time.Sleep(time.Second * 2)
-
-	cl.drop("dropped for testing")
-
 	return cl, errs.Wait()
 }
 
