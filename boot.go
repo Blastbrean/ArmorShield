@@ -192,7 +192,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		cl.logger.Warn("expiry parse error", slog.String("err", err.Error()))
 	}
 
-	//ubt := uint64(cl.baseTimestamp.Unix())
+	ubt := uint64(cl.baseTimestamp.Unix())
 
 	isz := strings.Contains(br.ExploitName, "Synapse Z")
 	isnihon := strings.Contains(br.ExploitName, "Nihon")
@@ -264,7 +264,16 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	cl.currentStage = ClientStageHandshake
 	cl.bootStageHandler = &sh
 	cl.stageHandler = handshakeHandler{hmacKey: [32]byte{}, rc4Key: [16]byte{}, bsh: sh}
-	cl.drop("foobar")
+	cl.sendMessage(Message{Id: PacketIdBootstrap, Data: BootResponse{
+		BaseTimestamp: ubt,
+		SubId:         cl.subId,
+		ClientFunctionDatas: ClientFunctionDatas{
+			PCall:            ClientFunctionData{ClosureInfoName: cl.pcall.closureInfoName, NormalArguments: cl.pcall.normalArguments, ErrorArguments: cl.pcall.errorArguments},
+			XpCall:           ClientFunctionData{ClosureInfoName: cl.xpcall.closureInfoName, NormalArguments: cl.xpcall.normalArguments, ErrorArguments: cl.xpcall.errorArguments},
+			IsFunctionHooked: ClientFunctionData{ClosureInfoName: cl.isFunctionHooked.closureInfoName, NormalArguments: cl.isFunctionHooked.normalArguments, ErrorArguments: cl.isFunctionHooked.errorArguments},
+			LoadString:       ClientFunctionData{ClosureInfoName: cl.loadString.closureInfoName, NormalArguments: cl.loadString.normalArguments, ErrorArguments: cl.loadString.errorArguments},
+		},
+	}})
 
 	return nil
 }
