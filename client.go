@@ -114,7 +114,7 @@ func (cl *client) writePacket(ctx context.Context, c *websocket.Conn, pk Packet)
 // Ignore any timeout or error by the close.
 // We don't care whether or not they receive a close frame since our client will not respond.
 // We do care however - if the client receives our dropping message.
-func (cl *client) closeConn(ctx context.Context, c *websocket.Conn, status websocket.StatusCode, reason string) error {
+func (cl *client) closeConn(ctx context.Context, c *websocket.Conn, reason string) error {
 	ser, err := msgpack.Marshal(DropPacket{
 		Reason: reason,
 	})
@@ -125,7 +125,7 @@ func (cl *client) closeConn(ctx context.Context, c *websocket.Conn, status webso
 
 	err = cl.writePacket(ctx, c, Packet{Id: PacketIdDropping, Msg: ser})
 
-	c.Close(status, reason)
+	c.CloseNow()
 
 	return tracerr.Wrap(err)
 }

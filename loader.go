@@ -233,7 +233,7 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 			cl.logger.Error("failed connection", attrs...)
 
 			if c != nil {
-				err = tracerr.Wrap(cl.closeConn(ctx, c, websocket.StatusInternalError, reason))
+				err = tracerr.Wrap(cl.closeConn(ctx, c, reason))
 			} else {
 				err = tracerr.New("no connection to fail")
 			}
@@ -253,7 +253,7 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 			err := error(nil)
 
 			if c != nil {
-				err = tracerr.Wrap(cl.closeConn(ctx, c, websocket.StatusInternalError, reason))
+				err = tracerr.Wrap(cl.closeConn(ctx, c, reason))
 			} else {
 				err = tracerr.New("no connection to fail")
 			}
@@ -291,10 +291,6 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 	errs.Go(func() error { return tracerr.Wrap(ls.writePump(ctx, cl, c)) })
 
 	cl.logger.Info("client subscribed with IP"+" "+cl.getRemoteAddr(), slog.Uint64("timestamp", uint64(cl.baseTimestamp.Unix())))
-
-	time.Sleep(1 * time.Second)
-
-	cl.drop("foobar")
 
 	return cl, errs.Wait()
 }
