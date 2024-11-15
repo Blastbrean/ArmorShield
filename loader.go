@@ -293,6 +293,8 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 
 	cl.logger.Info("client subscribed with IP"+" "+cl.getRemoteAddr(), slog.Uint64("timestamp", uint64(cl.baseTimestamp.Unix())))
 
+	log.Print("dropping client for testing")
+
 	err = cl.drop("dropped for testing")
 	if err != nil {
 		log.Print("failed to drop client", err)
