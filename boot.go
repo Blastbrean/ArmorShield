@@ -79,10 +79,14 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 
 	embed := discordwebhook.Embed{}
 
+	urlBefore := "https://armorshield.online:420/explore?schemaVersion=1&panes=%7B%22ij0%22:%7B%22datasource%22:%22ee3ky1czuj9c0f%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7BsubscriptionId%3D%5C%22"
+	urlAfter := "%5C%22%7D%20%7C%3D%20%60%60%22,%22queryType%22:%22range%22,%22datasource%22:%7B%22type%22:%22loki%22,%22uid%22:%22ee3ky1czuj9c0f%22%7D,%22editorMode%22:%22builder%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D%7D&orgId=1"
+	url := urlBefore + cl.subId.String() + urlAfter
+
 	if alertType == AlertTypeBolo {
 		embed = discordwebhook.Embed{
 			Title:       "Automated 'Be On The Lookout' Alert",
-			Description: "[Please manually check the logs of the key and subscription ID through this URL](https://armorshield.online:420).",
+			Description: fmt.Sprintf("[Please manually check the logs of the subscription ID through this URL](%s).", url),
 			Color:       0xFAFF00,
 			Timestamp:   time.Now(),
 			Footer: discordwebhook.Footer{
@@ -97,7 +101,7 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 	if alertType == AlertTypeBlacklist {
 		embed = discordwebhook.Embed{
 			Title:       "Automated 'Blacklist Key' Alert",
-			Description: "[Please manually check the logs of the key and subscription ID through this URL](https://armorshield.online:420).",
+			Description: fmt.Sprintf("[Please manually check the logs of the subscription ID through this URL](%s).", url),
 			Color:       0xFAFF00,
 			Timestamp:   time.Now(),
 			Footer: discordwebhook.Footer{
