@@ -121,7 +121,7 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 	}
 
 	if err := discordwebhook.ExecuteWebhook(pr.GetString("alertWebhook"), payload); err != nil {
-		cl.logger.Warn("can't execute webhook for alert", slog.String("err", err.Error()), slog.Int("alertType", alertType))
+		cl.logger.Warn("can't execute webhook for alert", slog.String("webhook", pr.GetString("alertWebhook")), slog.String("err", err.Error()), slog.Int("alertType", alertType))
 	}
 }
 
