@@ -110,8 +110,9 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 	}
 
 	hook := discordwebhook.Hook{
-		Content: "@everyone",
-		Embeds:  []discordwebhook.Embed{embed},
+		Content:  "@everyone",
+		Username: "ArmorShield",
+		Embeds:   []discordwebhook.Embed{embed},
 	}
 
 	payload, err := json.Marshal(hook)
