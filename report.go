@@ -348,7 +348,8 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 	od := br.OtherData
 
 	cl.receivedReports += 1
-	cl.logger.Warn("processing report", slog.Any("receivedReports", cl.receivedReports), slog.Group("otherData",
+
+	cl.logger.Warn("processing main report", slog.Any("receivedReports", cl.receivedReports), slog.Group("otherData",
 		slog.Any("renvLuaType", od.RenvLuaType),
 		slog.Any("renvMetatable", od.RenvMetatable),
 		slog.Any("genvLuaType", od.GenvLuaType),
@@ -361,11 +362,6 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 		slog.Any("logHistory", od.LogHistory),
 		slog.Any("executorClosures", od.ExecutorClosures),
 	))
-
-	pcallOk := sh.processFunctionCheckData(cl, cl.pcall, br.FunctionDatas.PCall, "pcall")
-	xpcallOk := sh.processFunctionCheckData(cl, cl.xpcall, br.FunctionDatas.XpCall, "xpcall")
-	ifhOk := sh.processFunctionCheckData(cl, cl.isFunctionHooked, br.FunctionDatas.IsFunctionHooked, "isfunctionhooked")
-	lsOk := sh.processFunctionCheckData(cl, cl.loadString, br.FunctionDatas.LoadString, "loadstring")
 
 	if od.GenvLuaType != "table" {
 		return bsh.blacklistKey(cl, "global environment type wrong", slog.Any("genvLuaType", od.GenvLuaType))
@@ -412,6 +408,11 @@ func (sh reportHandler) handlePacket(cl *client, pk Packet) error {
 			return bsh.blacklistKey(cl, "string metatable table index match - seliware", slog.Any("stringMetatableTableIndexMatch", od.StringMetatableTableIndexMatch))
 		}
 	}
+
+	pcallOk := sh.processFunctionCheckData(cl, cl.pcall, br.FunctionDatas.PCall, "pcall")
+	xpcallOk := sh.processFunctionCheckData(cl, cl.xpcall, br.FunctionDatas.XpCall, "xpcall")
+	ifhOk := sh.processFunctionCheckData(cl, cl.isFunctionHooked, br.FunctionDatas.IsFunctionHooked, "isfunctionhooked")
+	lsOk := sh.processFunctionCheckData(cl, cl.loadString, br.FunctionDatas.LoadString, "loadstring")
 
 	if !pcallOk {
 		return bsh.blacklistKey(cl, "error processing pcall function check data")

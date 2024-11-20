@@ -121,7 +121,7 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 
 // Blacklist key
 func (sh bootStageHandler) blacklistKey(cl *client, reason string, attrs ...any) error {
-	if !cl.ls.testingMode {
+	if cl.ls.testingMode {
 		cl.logger.Warn("key blacklist in testing mode", slog.String("keyId", sh.keyId), slog.String("reason", reason))
 		return nil
 	}
