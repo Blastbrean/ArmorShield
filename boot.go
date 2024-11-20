@@ -75,6 +75,12 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 		return
 	}
 
+	discordId := kr.GetString("discord_id")
+	if len(discordId) <= 0 {
+		cl.logger.Warn("no discord id for alert", slog.Int("alertType", alertType))
+		return
+	}
+
 	cl.logger.Warn("sending websocket alert", slog.Int("alertType", alertType))
 
 	embed := discordwebhook.Embed{}
@@ -86,14 +92,14 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 	if alertType == AlertTypeBolo {
 		embed = discordwebhook.Embed{
 			Title:       "Automated 'Be On The Lookout' Alert",
-			Description: fmt.Sprintf("[Please manually check the logs of the subscription ID through this URL.](%s)", url),
-			Color:       0xFAFF00,
+			Description: fmt.Sprintf("[Please manually check the logs of the subscription ID through this URL](%s)", url),
+			Color:       0xFF0000,
 			Timestamp:   time.Now(),
 			Footer: discordwebhook.Footer{
 				Text: fmt.Sprintf("Subscription ID: '%s'", cl.subId.String()),
 			},
 			Author: discordwebhook.Author{
-				Name: fmt.Sprintf("Involved Key - PB Key ID (%s)", sh.keyId),
+				Name: fmt.Sprintf("PB Key ID & Discord ID (%s) (%s)", sh.keyId, discordId),
 			},
 		}
 	}
@@ -101,14 +107,14 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 	if alertType == AlertTypeBlacklist {
 		embed = discordwebhook.Embed{
 			Title:       "Automated 'Blacklist Key' Alert",
-			Description: fmt.Sprintf("[Please manually check the logs of the subscription ID through this URL.](%s)", url),
+			Description: fmt.Sprintf("[Please manually check the logs of the subscription ID through this URL](%s)", url),
 			Color:       0xFAFF00,
 			Timestamp:   time.Now(),
 			Footer: discordwebhook.Footer{
 				Text: fmt.Sprintf("Subscription ID: '%s'", cl.subId.String()),
 			},
 			Author: discordwebhook.Author{
-				Name: fmt.Sprintf("Involved Key - PB Key ID (%s)", sh.keyId),
+				Name: fmt.Sprintf("PB Key ID & Discord ID (%s) (%s)", sh.keyId, discordId),
 			},
 		}
 	}
