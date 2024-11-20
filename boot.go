@@ -60,15 +60,18 @@ const (
 func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 	kr, err := cl.app.Dao().FindRecordById("keys", sh.keyId)
 	if err != nil {
+		cl.logger.Warn("no key for alert", slog.String("keyId", sh.keyId), slog.String("err", err.Error()), slog.Int("alertType", alertType))
 		return
 	}
 
 	if errs := cl.app.Dao().ExpandRecord(kr, []string{"project"}, nil); len(errs) > 0 {
+		cl.logger.Warn("no project for alert", slog.Any("errs", errs), slog.Int("alertType", alertType))
 		return
 	}
 
 	pr := kr.ExpandedOne("project")
 	if pr == nil {
+		cl.logger.Warn("no expand project for alert", slog.Int("alertType", alertType))
 		return
 	}
 
@@ -113,10 +116,13 @@ func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
 
 	payload, err := json.Marshal(hook)
 	if err != nil {
+		cl.logger.Warn("can't marshal for alert", slog.String("err", err.Error()), slog.Int("alertType", alertType))
 		return
 	}
 
-	discordwebhook.ExecuteWebhook(pr.GetString("alertWebhook"), payload)
+	if err := discordwebhook.ExecuteWebhook(pr.GetString("alertWebhook"), payload); err != nil {
+		cl.logger.Warn("can't execute webhook for alert", slog.String("err", err.Error()), slog.Int("alertType", alertType))
+	}
 }
 
 // Blacklist key
