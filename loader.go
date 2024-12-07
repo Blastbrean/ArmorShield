@@ -12,9 +12,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/models"
+	"github.com/pocketbase/pocketbase/core"
 	"github.com/realclientip/realclientip-go"
 	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
@@ -51,13 +50,16 @@ type loaderServer struct {
 
 	// Testing mode.
 	testingMode bool
+
+	// Protect function.
+	protect func(string, string, string, string, string) string
 }
 
 // This function accepts the WebSocket connection and then adds it to the list of all clients.
 // Instead of returning an error, this function will redirect errors to the logger implementation instead.
-func (ls *loaderServer) subscribeHandler(ctx echo.Context) {
-	req := ctx.Request()
-	cl, err := ls.subscribe(req.Context(), ctx.Response().Writer, req)
+func (ls *loaderServer) subscribeHandler(e *core.RequestEvent) {
+	req := e.Request
+	cl, err := ls.subscribe(req.Context(), e.Response, req)
 
 	if err == nil {
 		return
@@ -136,6 +138,27 @@ func (ls *loaderServer) readPump(ctx context.Context, cl *client, c *websocket.C
 	}
 }
 
+// Send a heartbeat to all clients without blocking.
+func (ls *loaderServer) sendHeartbeat() {
+	ls.clientMutex.Lock()
+	defer ls.clientMutex.Unlock()
+
+	ls.logger.Warn("sending heartbeat")
+
+	for cl := range ls.clients {
+		if cl.currentStage < ClientStageLoad {
+			continue
+		}
+
+		hsh := cl.handshakeStageHandler
+		if hsh == nil {
+			continue
+		}
+
+		hsh.sendMessage(cl, Message{Id: PacketIdHeartbeat, Data: nil})
+	}
+}
+
 // This listens for new messages written to the buffer and writes them to the WebSocket.
 // If we aren't done within a minute, we'll drop the client.
 func (ls *loaderServer) writePump(ctx context.Context, cl *client, c *websocket.Conn) error {
@@ -175,6 +198,9 @@ func (ls *loaderServer) timePump(ctx context.Context, cl *client, _ *websocket.C
 				return cl.drop("dropped due to inactivity before loading")
 			}
 
+		case <-cl.heartbeatTicker.C:
+			ls.sendHeartbeat()
+
 		case <-ctx.Done():
 			return tracerr.Wrap(ctx.Err())
 
@@ -197,15 +223,15 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 	subId := uuid.New()
 
 	cl = &client{
-		ls:         ls,
-		app:        ls.app,
-		logger:     ls.logger.With(slog.String("subscriptionId", subId.String())),
-		dropTicker: time.NewTicker(1 * time.Minute),
+		ls:              ls,
+		app:             ls.app,
+		logger:          ls.logger.With(slog.String("subscriptionId", subId.String())),
+		dropTicker:      time.NewTicker(1 * time.Minute),
+		heartbeatTicker: time.NewTicker(30 * time.Second),
 
 		subId:         subId,
 		baseTimestamp: time.Now(),
 
-		reportStageHandler:    nil,
 		handshakeStageHandler: nil,
 		bootStageHandler:      nil,
 		stageHandler:          bootStageHandler{keyId: ""},
@@ -310,7 +336,7 @@ func (ls *loaderServer) deleteClient(cl *client) {
 }
 
 // This function will get a client from a key record.
-func (ls *loaderServer) getClientFromKey(kr *models.Record) *client {
+func (ls *loaderServer) getClientFromKey(kr *core.Record) *client {
 	for cl := range ls.clients {
 		if cl.bootStageHandler == nil {
 			continue

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"log/slog"
 
 	"github.com/pocketbase/dbx"
@@ -15,7 +14,7 @@ type LoadMessage struct {
 
 // The load response will give the client the script to load
 type LoadResponse struct {
-	Script string
+	ScriptId string
 }
 
 // Load script handler
@@ -34,54 +33,35 @@ func (sh loadStageHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	if cl.receivedReports < 1 {
-		return sh.hsh.bsh.blacklistKey(cl, "not enough security reports were ran", slog.Int("sentReports", int(cl.receivedReports)), slog.Int("currentStage", int(cl.currentStage)))
-	}
-
-	kr, err := cl.app.Dao().FindRecordById("keys", sh.hsh.bsh.keyId)
+	kr, err := cl.app.FindRecordById("keys", sh.hsh.bsh.keyId)
 	if err != nil {
 		return cl.fail("failed to get key data", err)
 	}
 
-	if errs := cl.app.Dao().ExpandRecord(kr, []string{"project"}, nil); len(errs) > 0 {
-		return cl.drop("failed to expand record", slog.Any("errors", errs), slog.String("record", kr.GetId()))
+	if errs := cl.app.ExpandRecord(kr, []string{"project"}, nil); len(errs) > 0 {
+		return cl.drop("failed to expand record", slog.Any("errors", errs), slog.String("record", kr.Id))
 	}
 
 	pr := kr.ExpandedOne("project")
 	if pr == nil {
-		return cl.drop("failed to get project from key", slog.String("record", kr.GetId()))
+		return cl.drop("failed to get project from key", slog.String("record", kr.Id))
 	}
 
 	if kr.GetString("role") == "pentest" && lm.GameId != 1430993116 {
 		return cl.fail("unable to load script outside of baseplate as a pentester", nil)
 	}
 
-	sr, err := cl.app.Dao().FindFirstRecordByFilter("scripts", "project = {:projectId} && game = {:gameId}", dbx.Params{"projectId": pr.GetId(), "gameId": lm.GameId})
+	sr, err := cl.app.FindFirstRecordByFilter("scripts", "project = {:projectId} && game = {:gameId}", dbx.Params{"projectId": pr.Id, "gameId": lm.GameId})
 	if err != nil {
 		return cl.fail("failed to find script for game", err)
 	}
 
-	key := sr.BaseFilesPath() + "/" + sr.GetString("file")
-
-	fsys, _ := cl.app.NewFilesystem()
-	defer fsys.Close()
-
-	blob, _ := fsys.GetFile(key)
-	defer blob.Close()
-
-	b := Get()
-	defer Put(b)
-
-	_, err = b.ReadFrom(io.LimitReader(blob, EXPECTED_SCRIPT_FILE_SIZE))
-	if err != nil {
-		return err
-	}
-
-	cl.logger.Warn("loaded script", slog.Int("size", b.Len()))
+	cl.logger.Warn("loaded script", slog.Uint64("game", lm.GameId))
 	cl.currentStage = ClientStageLoad
+	cl.stageHandler = heartbeatStageHandler{}
 
 	sh.hsh.sendMessage(cl, Message{Id: pk.Id, Data: LoadResponse{
-		Script: b.String(),
+		ScriptId: sr.Id,
 	}})
 
 	return nil

@@ -12,9 +12,6 @@ import (
 	"nhooyr.io/websocket"
 )
 
-// ArmorShield watermark
-const ArmorShieldWatermark = "🛡️🛡️🛡️ArmorShield🛡️🛡️🛡️"
-
 // Version numbers for the SWS protocol.
 const (
 	VersionSWS100 = iota + 0x64
@@ -46,41 +43,22 @@ type Message struct {
 	Data interface{}
 }
 
-// Function arguments
-type FunctionArgument struct {
-	FunctionString *string
-	String         *string
-	Int            *int
-}
-
-// Function data
-type functionData struct {
-	closureInfoName   string
-	checkLuaCallLimit bool
-	checkTrapTriggers bool
-	isExploitClosure  bool
-	normalArguments   []FunctionArgument
-	errorArguments    []FunctionArgument
-	errorReturnCheck  func(err string) bool
-}
-
 // A client represents a connection to the loader.
 // Packets and messages are queued in a channel to the client from the server.
 // If they're too slow to keep up with the packets or messages, they'll be removed.
 type client struct {
-	ls         *loaderServer
-	app        *pocketbase.PocketBase
-	logger     *slog.Logger
-	dropTicker *time.Ticker
+	ls              *loaderServer
+	app             *pocketbase.PocketBase
+	logger          *slog.Logger
+	dropTicker      *time.Ticker
+	heartbeatTicker *time.Ticker
 
 	subId         uuid.UUID
 	baseTimestamp time.Time
 
 	handshakeStageHandler *handshakeHandler
-	reportStageHandler    *reportHandler
 	bootStageHandler      *bootStageHandler
 	stageHandler          stageHandler
-	receivedReports       byte
 
 	currentStage byte
 	closed       bool
@@ -91,11 +69,6 @@ type client struct {
 	getRemoteAddr func() string
 	fail          func(reason string, err error, args ...any) error
 	drop          func(reason string, args ...any) error
-
-	xpcall           *functionData
-	pcall            *functionData
-	isFunctionHooked *functionData
-	loadString       *functionData
 }
 
 // Write a packet to the websocket connection.
@@ -154,10 +127,6 @@ func (cl *client) sendMessage(msg Message) error {
 // Handle packet.
 func (cl *client) handlePacket(pk Packet) error {
 	cl.logger.Info("handling packet", slog.Int("id", int(pk.Id)))
-
-	if pk.Id == PacketIdReport && cl.reportStageHandler != nil {
-		return tracerr.Wrap(cl.reportStageHandler.handlePacket(cl, pk))
-	}
 
 	if pk.Id != cl.stageHandler.handlePacketId() {
 		return cl.drop("packet mismatch", slog.Int("stage", int(cl.currentStage)), slog.Int("id", int(pk.Id)), slog.Int("expected", int(cl.stageHandler.handlePacketId())))

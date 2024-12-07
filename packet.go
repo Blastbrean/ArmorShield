@@ -17,10 +17,10 @@ type stageHandler interface {
 const (
 	PacketIdBootstrap = iota
 	PacketIdHandshake
-	PacketIdReport
 	PacketIdEstablish
 	PacketIdIdentify
 	PacketIdLoad
 	PacketIdDropping
 	PacketIdKeyUpdate
+	PacketIdHeartbeat
 )

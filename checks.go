@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase/models"
+	"github.com/pocketbase/pocketbase/core"
 	"github.com/ztrue/tracerr"
 )
 
@@ -23,7 +23,7 @@ func checkAssosiation(ji *JoinInfo) error {
 }
 
 func checkBlacklist(cl *client, fi *FingerprintInfo) error {
-	blfr, err := cl.app.Dao().FindFirstRecordByFilter(
+	blfr, err := cl.app.FindFirstRecordByFilter(
 		"fingerprint",
 		"key.blacklist != null && (exploitHwid = {:exploitHwid})",
 		dbx.Params{"exploitHwid": fi.ExploitHwid},
@@ -33,7 +33,7 @@ func checkBlacklist(cl *client, fi *FingerprintInfo) error {
 		return tracerr.New("fingerprint blacklist")
 	}
 
-	blips, err := cl.app.Dao().FindRecordsByFilter(
+	blips, err := cl.app.FindRecordsByFilter(
 		"fingerprint",
 		"key.blacklist != null && (ipAddress = {:ipAddress})",
 		"", 2, 0, dbx.Params{"ipAddress": cl.getRemoteAddr()},
@@ -47,7 +47,7 @@ func checkBlacklist(cl *client, fi *FingerprintInfo) error {
 }
 
 // check for changed device or exploit, new region or locale or dst change. then check for hwid change.
-func checkMismatch(en string, fi *FingerprintInfo, fr *models.Record, ar *models.Record, ai *AnalyticsInfo) error {
+func checkMismatch(en string, fi *FingerprintInfo, fr *core.Record, ar *core.Record, ai *AnalyticsInfo) error {
 	if fr.GetString("exploitHwid") != fi.ExploitHwid {
 		return tracerr.New("hwid mismatch")
 	}

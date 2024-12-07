@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"log/slog"
 
 	"github.com/shamaton/msgpack/v2"
@@ -114,18 +115,18 @@ func (sh handshakeHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	kr, err := cl.app.Dao().FindRecordById("keys", sh.bsh.keyId)
+	kr, err := cl.app.FindRecordById("keys", sh.bsh.keyId)
 	if err != nil {
 		return cl.drop("failed to get key data", slog.String("error", err.Error()))
 	}
 
-	if errs := cl.app.Dao().ExpandRecord(kr, []string{"project"}, nil); len(errs) > 0 {
-		return cl.drop("failed to expand record", slog.Any("errors", errs), slog.String("record", kr.GetId()))
+	if errs := cl.app.ExpandRecord(kr, []string{"project"}, nil); len(errs) > 0 {
+		return cl.drop("failed to expand record", slog.Any("errors", errs), slog.String("record", kr.Id))
 	}
 
 	pr := kr.ExpandedOne("project")
 	if pr == nil {
-		return cl.drop("failed to get project from key", slog.String("record", kr.GetId()))
+		return cl.drop("failed to get project from key", slog.String("record", kr.Id))
 	}
 
 	bp, err := base64.StdEncoding.DecodeString(pr.GetString("point"))
@@ -137,6 +138,8 @@ func (sh handshakeHandler) handlePacket(cl *client, pk Packet) error {
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
+
+	cl.logger.Info("handshake db", slog.Any("point", hex.EncodeToString(bp)), slog.Any("salt", hex.EncodeToString(st)))
 
 	pvk := make([]byte, 32)
 	_, err = rand.Read(pvk)
@@ -168,10 +171,7 @@ func (sh handshakeHandler) handlePacket(cl *client, pk Packet) error {
 
 	cl.currentStage = ClientStageEstablishing
 	cl.handshakeStageHandler = &sh
-
 	cl.stageHandler = establishedStageHandler{hsh: sh}
-	cl.reportStageHandler = &reportHandler{hsh: sh}
-
 	cl.sendMessage(Message{Id: sh.handlePacketId(), Data: HandshakeResponse{
 		ServerPublicKey: [32]byte(pbk),
 	}})

@@ -19,5 +19,6 @@
         "titleBar.inactiveForeground": "#e7e7e799"
     },
     "peacock.color": "#832561",
-    "workbench.colorTheme": "SynthWave '84"
+    "workbench.colorTheme": "SynthWave '84",
+    "stylua.targetReleaseVersion": "latest"
 }

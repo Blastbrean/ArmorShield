@@ -6,7 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase/models"
+	"github.com/pocketbase/pocketbase/core"
 	"github.com/ztrue/tracerr"
 )
 
@@ -138,7 +138,7 @@ func getWorkspaceScanMatchPercentage(ws []string, ows []string) float64 {
 }
 
 // Check BOLO sessions
-func checkBoloSessionsIsGood(cl *client, si *SessionInfo, bolo_sessions []*models.Record) bool {
+func checkBoloSessionsIsGood(cl *client, si *SessionInfo, bolo_sessions []*core.Record) bool {
 	for _, bolo_session := range bolo_sessions {
 		var swp float64
 		var ws []string
@@ -153,11 +153,11 @@ func checkBoloSessionsIsGood(cl *client, si *SessionInfo, bolo_sessions []*model
 		sm := bolo_session.GetString("robloxSessionId") == si.RobloxSessionId || bolo_session.GetString("playSessionId") == si.PlaySessionId || bolo_session.GetFloat("cpuStart") == si.CpuStart
 
 		if sm {
-			cl.logger.Info("user session is matching with BOLO user", slog.Any("session", bolo_session.GetId()))
+			cl.logger.Info("user session is matching with BOLO user", slog.Any("session", bolo_session.Id))
 		}
 
 		if sw {
-			cl.logger.Info("user workspace is matching with BOLO user", slog.Any("percentage", sw), slog.Any("session", bolo_session.GetId()))
+			cl.logger.Info("user workspace is matching with BOLO user", slog.Any("percentage", sw), slog.Any("session", bolo_session.Id))
 		}
 
 		if sm || sw {
@@ -169,7 +169,7 @@ func checkBoloSessionsIsGood(cl *client, si *SessionInfo, bolo_sessions []*model
 }
 
 // Expect identifiers
-func expectIdentifiers(cl *client, en string, im *IdentifyMessage, kr *models.Record) (*models.Record, *models.Record, *models.Record, *models.Record, error) {
+func expectIdentifiers(cl *client, en string, im *IdentifyMessage, kr *core.Record) (*core.Record, *core.Record, *core.Record, *core.Record, error) {
 	ai := im.KeyInfo.AnalyticsInfo
 
 	cl.logger.Info("current analytics information", slog.Group("analyticsInfo",
@@ -265,14 +265,14 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 
 	en := cl.bootStageHandler.exploitName
 
-	kr, err := cl.app.Dao().FindRecordById("keys", sh.hsh.bsh.keyId)
+	kr, err := cl.app.FindRecordById("keys", sh.hsh.bsh.keyId)
 	if err != nil {
 		return cl.fail("failed to get key data", err)
 	}
 
 	ar, fr, sr, jr, err := expectIdentifiers(cl, en, &im, kr)
 	if err != nil {
-		return cl.fail("expected identifiers from key", err, slog.Any("records", []*models.Record{ar, fr, sr, jr}))
+		return cl.fail("expected identifiers from key", err, slog.Any("records", []*core.Record{ar, fr, sr, jr}))
 	}
 
 	if err := checkBlacklist(cl, &im.KeyInfo.FingerprintInfo); err != nil {
@@ -292,42 +292,42 @@ func (sh identifyHandler) handlePacket(cl *client, pk Packet) error {
 
 	ok := true
 
-	bolo_ip, err := cl.app.Dao().FindFirstRecordByFilter(
+	bolo_ip, err := cl.app.FindFirstRecordByFilter(
 		"fingerprint",
 		"key.bolo != false && (ipAddress = {:ipAddress})",
 		dbx.Params{"ipAddress": cl.getRemoteAddr()},
 	)
 
 	if bolo_ip != nil && err == nil {
-		cl.logger.Info("user IP is matching with BOLO user", slog.Any("fingerprint", bolo_ip.GetId()))
+		cl.logger.Info("user IP is matching with BOLO user", slog.Any("fingerprint", bolo_ip.Id))
 		ok = false
 	}
 
 	si := &im.SubInfo.SessionInfo
 
-	bolo_session, err := cl.app.Dao().FindFirstRecordByFilter(
+	bolo_session, err := cl.app.FindFirstRecordByFilter(
 		"sessions",
 		"subscription.key.bolo != false && (cpuStart = {:cpuStart} || playSessionId = {:playSessionId} || robloxSessionId = {:robloxSessionId})",
 		dbx.Params{"robloxSessionId": si.RobloxSessionId, "playSessionId": si.PlaySessionId, "cpuStart": si.CpuStart},
 	)
 
 	if bolo_session != nil && err == nil {
-		cl.logger.Info("user session is matching with BOLO user", slog.Any("session", bolo_session.GetId()))
+		cl.logger.Info("user session is matching with BOLO user", slog.Any("session", bolo_session.Id))
 		ok = false
 	}
 
-	bolo_join, err := cl.app.Dao().FindFirstRecordByFilter(
+	bolo_join, err := cl.app.FindFirstRecordByFilter(
 		"joins",
 		"subscription.key.bolo != false && userId = {:userId}",
 		dbx.Params{"userId": im.SubInfo.JoinInfo.UserId},
 	)
 
 	if bolo_join != nil && err == nil {
-		cl.logger.Info("user join is matching with BOLO user", slog.Any("join", bolo_join.GetId()))
+		cl.logger.Info("user join is matching with BOLO user", slog.Any("join", bolo_join.Id))
 		ok = false
 	}
 
-	bolo_sessions, err := cl.app.Dao().FindRecordsByFilter(
+	bolo_sessions, err := cl.app.FindRecordsByFilter(
 		"sessions",
 		"subscription.key.bolo != false",
 		"", 0, 0, dbx.Params{},

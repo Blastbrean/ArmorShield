@@ -4,11 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	discordwebhook "github.com/bensch777/discord-webhook-golang"
-	"github.com/pocketbase/pocketbase/forms"
 	"github.com/pocketbase/pocketbase/tools/types"
 	"github.com/shamaton/msgpack/v2"
 	"github.com/ztrue/tracerr"
@@ -20,28 +18,10 @@ type BootMessage struct {
 	ExploitName string
 }
 
-// Client function data
-type ClientFunctionData struct {
-	ClosureInfoName string
-	CheckCCallLimit bool
-	NormalArguments []FunctionArgument
-	ErrorArguments  []FunctionArgument
-}
-
-// Client function datas
-type ClientFunctionDatas struct {
-	PCall            ClientFunctionData
-	XpCall           ClientFunctionData
-	IsFunctionHooked ClientFunctionData
-	LoadString       ClientFunctionData
-	DebugGetStack    ClientFunctionData
-}
-
 // The boot response is information sent from the server to initiate the client
 type BootResponse struct {
-	BaseTimestamp       uint64
-	SubId               [16]byte
-	ClientFunctionDatas ClientFunctionDatas
+	BaseTimestamp uint64
+	SubId         [16]byte
 }
 
 // Boot stage handler
@@ -58,13 +38,13 @@ const (
 
 // Send alert to WebSocket
 func (sh bootStageHandler) sendAlert(cl *client, alertType int) {
-	kr, err := cl.app.Dao().FindRecordById("keys", sh.keyId)
+	kr, err := cl.app.FindRecordById("keys", sh.keyId)
 	if err != nil {
 		cl.logger.Warn("no key for alert", slog.String("keyId", sh.keyId), slog.String("err", err.Error()), slog.Int("alertType", alertType))
 		return
 	}
 
-	if errs := cl.app.Dao().ExpandRecord(kr, []string{"project"}, nil); len(errs) > 0 {
+	if errs := cl.app.ExpandRecord(kr, []string{"project"}, nil); len(errs) > 0 {
 		cl.logger.Warn("no project for alert", slog.Any("errs", errs), slog.Int("alertType", alertType))
 		return
 	}
@@ -143,21 +123,17 @@ func (sh bootStageHandler) blacklistKey(cl *client, reason string, attrs ...any)
 		return nil
 	}
 
-	kr, err := cl.app.Dao().FindRecordById("keys", sh.keyId)
+	kr, err := cl.app.FindRecordById("keys", sh.keyId)
 	if err != nil {
 		return cl.fail("failed to get key data", err)
 	}
-
-	form := forms.NewRecordUpsert(cl.app, kr)
-	form.LoadData(map[string]any{
-		"blacklist": reason,
-	})
 
 	cl.logger.Warn("blacklisting key", slog.String("keyId", sh.keyId), slog.String("reason", reason))
 
 	sh.sendAlert(cl, AlertTypeBlacklist)
 
-	if err := form.Submit(); err != nil {
+	err = cl.app.Save(kr)
+	if err != nil {
 		return err
 	}
 
@@ -172,7 +148,7 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 		return tracerr.Wrap(err)
 	}
 
-	kr, err := cl.app.Dao().FindRecordById("keys", br.KeyId)
+	kr, err := cl.app.FindRecordById("keys", br.KeyId)
 	if err != nil {
 		return cl.fail("key not found", err)
 	}
@@ -211,72 +187,8 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 
 	ubt := uint64(cl.baseTimestamp.Unix())
 
-	isz := strings.Contains(br.ExploitName, "Synapse Z")
-	isnihon := strings.Contains(br.ExploitName, "Nihon")
-
-	ifh := ""
-	ls := ""
-
-	if isz || isnihon {
-		ls = "loadstring"
-		ifh = "isfunctionhooked"
-	}
-
 	sh.keyId = br.KeyId
 	sh.exploitName = br.ExploitName
-
-	rtn := "return nil"
-	rtam := "return" + " " + "'" + ArmorShieldWatermark + "'"
-
-	cl.pcall = &functionData{
-		closureInfoName:   "pcall",
-		checkTrapTriggers: true,
-		checkLuaCallLimit: true,
-		isExploitClosure:  false,
-		normalArguments:   []FunctionArgument{{FunctionString: &rtn}},
-		errorArguments:    []FunctionArgument{},
-		errorReturnCheck: func(err string) bool {
-			return strings.Contains(err, "missing argument #1")
-		},
-	}
-
-	cl.xpcall = &functionData{
-		closureInfoName:   "xpcall",
-		checkTrapTriggers: true,
-		checkLuaCallLimit: true,
-		isExploitClosure:  false,
-		normalArguments:   []FunctionArgument{{FunctionString: &rtn}, {FunctionString: &rtn}},
-		errorArguments:    []FunctionArgument{},
-		errorReturnCheck: func(err string) bool {
-			return strings.Contains(err, "missing argument #2")
-		},
-	}
-
-	cl.isFunctionHooked = &functionData{
-		closureInfoName:   ifh,
-		checkTrapTriggers: true,
-		checkLuaCallLimit: true,
-		isExploitClosure:  true,
-		normalArguments:   []FunctionArgument{{FunctionString: &rtn}},
-		errorArguments:    []FunctionArgument{},
-		errorReturnCheck: func(err string) bool {
-			return strings.Contains(err, "missing argument #1")
-		},
-	}
-
-	// @note: normal return check is checking for boolean - not function...
-	// function check will be handled on client side
-	cl.loadString = &functionData{
-		closureInfoName:   ls,
-		checkTrapTriggers: true,
-		checkLuaCallLimit: true,
-		isExploitClosure:  true,
-		normalArguments:   []FunctionArgument{{String: &rtam}},
-		errorArguments:    []FunctionArgument{},
-		errorReturnCheck: func(err string) bool {
-			return strings.Contains(err, "missing argument #1")
-		},
-	}
 
 	cl.currentStage = ClientStageHandshake
 	cl.bootStageHandler = &sh
@@ -284,12 +196,6 @@ func (sh bootStageHandler) handlePacket(cl *client, pk Packet) error {
 	cl.sendMessage(Message{Id: PacketIdBootstrap, Data: BootResponse{
 		BaseTimestamp: ubt,
 		SubId:         cl.subId,
-		ClientFunctionDatas: ClientFunctionDatas{
-			PCall:            ClientFunctionData{ClosureInfoName: cl.pcall.closureInfoName, NormalArguments: cl.pcall.normalArguments, ErrorArguments: cl.pcall.errorArguments},
-			XpCall:           ClientFunctionData{ClosureInfoName: cl.xpcall.closureInfoName, NormalArguments: cl.xpcall.normalArguments, ErrorArguments: cl.xpcall.errorArguments},
-			IsFunctionHooked: ClientFunctionData{ClosureInfoName: cl.isFunctionHooked.closureInfoName, NormalArguments: cl.isFunctionHooked.normalArguments, ErrorArguments: cl.isFunctionHooked.errorArguments},
-			LoadString:       ClientFunctionData{ClosureInfoName: cl.loadString.closureInfoName, NormalArguments: cl.loadString.normalArguments, ErrorArguments: cl.loadString.errorArguments},
-		},
 	}})
 
 	return nil
