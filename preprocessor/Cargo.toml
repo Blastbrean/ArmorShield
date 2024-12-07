@@ -1,5 +1,5 @@
 [package]
-name = "protector_lib"
+name = "armorshield_preprocessor"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,7 +9,7 @@ darklua = "0.14.1"
 libc = "0.2.167"
 
 [lib]
-name = "protector_lib"
+name = "armorshield_preprocessor"
 crate-type = ["cdylib"]
 
 [build-dependencies]

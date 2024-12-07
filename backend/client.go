@@ -47,9 +47,10 @@ type Message struct {
 // Packets and messages are queued in a channel to the client from the server.
 // If they're too slow to keep up with the packets or messages, they'll be removed.
 type client struct {
-	ls              *loaderServer
-	app             *pocketbase.PocketBase
-	logger          *slog.Logger
+	ls     *loaderServer
+	app    *pocketbase.PocketBase
+	logger *slog.Logger
+
 	dropTicker      *time.Ticker
 	heartbeatTicker *time.Ticker
 
@@ -96,11 +97,11 @@ func (cl *client) closeConn(ctx context.Context, c *websocket.Conn, reason strin
 		return tracerr.Wrap(err)
 	}
 
-	err = cl.writePacket(ctx, c, Packet{Id: PacketIdDropping, Msg: ser})
+	if err := cl.writePacket(ctx, c, Packet{Id: PacketIdDropping, Msg: ser}); err != nil {
+		return tracerr.Wrap(err)
+	}
 
-	c.CloseNow()
-
-	return tracerr.Wrap(err)
+	return c.CloseNow()
 }
 
 // Send a packet without blocking.

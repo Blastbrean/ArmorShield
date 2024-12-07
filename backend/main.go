@@ -13,22 +13,48 @@ import (
 	"time"
 
 	"github.com/ebitengine/purego"
-	"github.com/grafana/loki-client-go/loki"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"golang.org/x/time/rate"
 
-	slogloki "github.com/samber/slog-loki/v3"
 	"github.com/ztrue/tracerr"
 )
 
-func protect(ls *loaderServer, sr *core.Record) error {
+func protect(app *pocketbase.PocketBase, sr *core.Record) error {
+	libPath := ""
+
+	err := filepath.WalkDir("./protector_lib", func(path string, di fs.DirEntry, err error) error {
+		if di.IsDir() {
+			return nil
+		}
+
+		if !strings.Contains(path, "deps") && strings.Contains(path, "release") && (filepath.Ext(path) == ".so" || filepath.Ext(path) == ".dll") {
+			libPath = path
+		}
+
+		return nil
+	})
+
+	if len(libPath) <= 0 || err != nil {
+		log.Fatal("Failed to find protector library.")
+	}
+
+	protectLib, err := openLibrary("./protector_lib/target/release/protector_lib.dll")
+	if err != nil {
+		log.Fatal("Failed to load protector library.")
+	}
+
+	var protectScript func(loader string, source string, salt string, point string, scriptId string) string
+	purego.RegisterLibFunc(&protectScript, protectLib, "protect")
+
+	defer closeLibrary(protectLib)
+
 	if strings.Contains(sr.GetString("file"), "protected") {
 		return nil
 	}
 
-	if errs := ls.app.ExpandRecord(sr, []string{"project"}, nil); len(errs) > 0 {
+	if errs := app.ExpandRecord(sr, []string{"project"}, nil); len(errs) > 0 {
 		return tracerr.New("failed to expand record")
 	}
 
@@ -39,7 +65,7 @@ func protect(ls *loaderServer, sr *core.Record) error {
 
 	key := sr.BaseFilesPath() + "/" + sr.GetString("file")
 
-	fsys, _ := ls.app.NewFilesystem()
+	fsys, _ := app.NewFilesystem()
 	defer fsys.Close()
 
 	blob, _ := fsys.GetFile(key)
@@ -48,43 +74,20 @@ func protect(ls *loaderServer, sr *core.Record) error {
 	b := Get()
 	defer Put(b)
 
-	_, err := b.ReadFrom(io.LimitReader(blob, EXPECTED_SCRIPT_FILE_SIZE))
+	_, err = b.ReadFrom(io.LimitReader(blob, EXPECTED_SCRIPT_FILE_SIZE))
 	if err != nil {
 		return err
 	}
 
-	lo := ""
-
-	err = filepath.WalkDir("..", func(path string, di fs.DirEntry, err error) error {
-		if di.IsDir() {
-			return nil
-		}
-
-		if strings.Contains(path, "Lycoris-Init-Client") && strings.Contains(path, "bundled") && strings.Contains(path, "output") && filepath.Ext(path) == ".lua" {
-			ls.app.Logger().Info("found loader script", slog.String("path", path))
-			lo = path
-		}
-
-		return nil
-	})
-
+	los, err := os.ReadFile("../Lycoris-Init-Client/bundled/output.lua")
 	if err != nil {
 		return err
 	}
 
-	los, err := os.ReadFile(lo)
-	if err != nil {
-		return err
-	}
-
-	ls.app.Logger().Info("protecting loader script", slog.String("path", lo), slog.Int("len", len(los)))
-
-	ps := ls.protect(string(los), b.String(), pr.GetString("salt"), pr.GetString("point"), sr.Id)
+	ps := protectScript(string(los), b.String(), pr.GetString("salt"), pr.GetString("point"), sr.Id)
 	if len(ps) == 0 {
 		return tracerr.New("failed to protect script")
 	}
-
-	ls.app.Logger().Info("uploading loader script", slog.String("key", key), slog.Int("len", len(ps)))
 
 	blob.Close()
 
@@ -95,34 +98,10 @@ func protect(ls *loaderServer, sr *core.Record) error {
 
 	sr.Set("file", file)
 
-	return ls.app.Save(sr)
+	return app.Save(sr)
 }
 
 func main() {
-	pp := ""
-
-	err := filepath.WalkDir(".", func(path string, di fs.DirEntry, err error) error {
-		if di.IsDir() {
-			return nil
-		}
-
-		if !strings.Contains(path, "deps") && strings.Contains(path, "release") && (filepath.Ext(path) == ".so" || filepath.Ext(path) == ".dll") {
-			log.Print("Found protector lib: ", path)
-			pp = path
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		log.Fatal("Failed to find protector lib: ", err)
-	}
-
-	plib, err := openLibrary(pp)
-	if err != nil {
-		log.Fatal("Failed to load protector lib: ", err)
-	}
-
 	app := pocketbase.New()
 
 	var testingMode bool
@@ -130,14 +109,22 @@ func main() {
 		&testingMode,
 		"testingMode",
 		false,
-		"Run the loader in testing mode, prevent blacklist(s) from being enforced, and skip logging implementation.",
+		"Prevent blacklist(s) from being enforced.",
 	)
 
 	app.RootCmd.ParseFlags(os.Args[1:])
 
+	app.OnRecordAfterCreateSuccess("scripts").BindFunc(func(e *core.RecordEvent) error {
+		return protect(app, e.Record)
+	})
+
+	app.OnRecordAfterUpdateSuccess("scripts").BindFunc(func(e *core.RecordEvent) error {
+		return protect(app, e.Record)
+	})
+
 	ls := loaderServer{
 		app:                   app,
-		logger:                nil,
+		logger:                app.Logger(),
 		messageBufferLimit:    16,
 		packetBufferLimit:     16,
 		readLimitBytes:        20000,
@@ -146,27 +133,6 @@ func main() {
 		clients:               make(map[*client]struct{}),
 		testingMode:           testingMode,
 	}
-
-	purego.RegisterLibFunc(&ls.protect, plib, "protect")
-
-	if !testingMode {
-		config, _ := loki.NewDefaultConfig("http://localhost:3030/loki/api/v1/push")
-		config.TenantID = "ArmorShield"
-
-		lokiclient, _ := loki.New(config)
-
-		ls.logger = slog.New(slogloki.Option{Level: slog.LevelDebug, Client: lokiclient}.NewLokiHandler())
-	} else {
-		ls.logger = app.Logger()
-	}
-
-	app.OnRecordAfterCreateSuccess("scripts").BindFunc(func(e *core.RecordEvent) error {
-		return protect(&ls, e.Record)
-	})
-
-	app.OnRecordAfterUpdateSuccess("scripts").BindFunc(func(e *core.RecordEvent) error {
-		return protect(&ls, e.Record)
-	})
 
 	app.OnRecordAfterUpdateSuccess("keys").BindFunc(func(e *core.RecordEvent) error {
 		kr := e.Record

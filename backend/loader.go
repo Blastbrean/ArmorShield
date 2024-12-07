@@ -50,9 +50,6 @@ type loaderServer struct {
 
 	// Testing mode.
 	testingMode bool
-
-	// Protect function.
-	protect func(string, string, string, string, string) string
 }
 
 // This function accepts the WebSocket connection and then adds it to the list of all clients.
@@ -243,10 +240,6 @@ func (ls *loaderServer) subscribe(ctx context.Context, w http.ResponseWriter, r 
 		readerClosed: make(chan struct{}),
 
 		getRemoteAddr: func() string {
-			if cl.ls.testingMode {
-				return "69.420.69.420"
-			}
-
 			strat, _ := realclientip.NewRightmostNonPrivateStrategy("X-Forwarded-For")
 			return strat.ClientIP(r.Header, r.RemoteAddr)
 		},
