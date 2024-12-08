@@ -7,7 +7,7 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use darklua_core::{generator::{DenseLuaGenerator, LuaGenerator}, rules::{ComputeExpression, ContextBuilder, ConvertIndexToField, ConvertLocalFunctionToAssign, FlawlessRule, GroupLocalAssignment, RemoveComments, RemoveFunctionCallParens, RenameVariables}, Parser, Resources};
 
 #[no_mangle]
-pub extern "C" fn protect(loader: *const libc::c_char, source: *const libc::c_char, salt: *const libc::c_char, point: *const libc::c_char, id: *const libc::c_char) -> *const libc::c_char {
+pub extern "C" fn preprocess(loader: *const libc::c_char, source: *const libc::c_char, salt: *const libc::c_char, point: *const libc::c_char, id: *const libc::c_char) -> *const libc::c_char {
     let buf_source = unsafe { CStr::from_ptr(source).to_bytes() };
     let str_source = String::from_utf8(buf_source.to_vec()).unwrap();
 

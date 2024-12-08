@@ -10,7 +10,6 @@
 ---@field key_update_listeners function[]
 ---@field packets packet[]
 ---@field garbage any[]
----@field heartbeat boolean[]
 ---@field messages message[]
 ---@field closing boolean
 ---@field closed boolean
@@ -134,10 +133,6 @@ function connection_data:handle_packet(data)
 		return self.key_update_stage_handler and self.key_update_stage_handler:handle_packet(self, pk)
 	end
 
-	if pk.Id == 7 then
-		return self.handshake_stage_handler and self.handshake_stage_handler:send_message(self, pk.Id, {})
-	end
-
 	if pk.Id ~= self.stage_handler:handle_packet_id() then
 		return self:disconnect("packet mismatch (%i vs. %i)", pk.Id, self.stage_handler:handle_packet_id())
 	end
@@ -173,7 +168,6 @@ function connection_data.new(default_stage, default_stage_handler)
 	self.packets = {}
 	self.messages = {}
 	self.garbage = {}
-	self.heartbeat = {}
 	self.data_listeners = {}
 	self.key_update_listeners = {}
 	self.closing = false

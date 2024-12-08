@@ -1,76 +1,95 @@
 package main
 
 import (
+	"armorshield/universe"
+
 	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
-	"github.com/ztrue/tracerr"
 )
 
-func checkAssosiation(ji *JoinInfo) error {
-	if usm := NewUniverse(ji.UserGroups).SliceMatches([]uint64{15326583, 33987101, 33987290, 33423445}); len(usm) > 0 {
-		return tracerr.New("group assosiation")
+type ResultType uint32
+
+const (
+	RESULT_SUCCESS ResultType = iota
+	RESULT_GROUP_ASSOSIATION
+	RESULT_FOLLOWING_ASSOSIATION
+	RESULT_FRIENDS_ASSOSIATION
+	RESULT_FINGERPRINT_MATCH
+	RESULT_IP_MATCH
+	RESULT_HWID_MISMATCH
+	RESULT_EXPLOIT_MISMATCH
+	RESULT_DEVICE_TYPE_MISMATCH
+	RESULT_LOCALE_MISMATCH
+	RESULT_REGION_MISMATCH
+	RESULT_DST_MISMATCH
+)
+
+func checkAssosiation(ji *JoinInfo) ResultType {
+	if usm := universe.New(ji.UserGroups).SliceMatches([]uint64{15326583, 33987101, 33987290, 33423445}); len(usm) > 0 {
+		return RESULT_GROUP_ASSOSIATION
 	}
 
-	if usm := NewUniverse(ji.UserFollowing).SliceMatches([]uint64{112508646, 3657821880, 5463447056, 141656968, 4379286741, 972539685, 2046352519}); len(usm) > 0 {
-		return tracerr.New("following assosiation")
+	if usm := universe.New(ji.UserFollowing).SliceMatches([]uint64{112508646, 3657821880, 5463447056, 141656968, 4379286741, 972539685, 2046352519}); len(usm) > 0 {
+		return RESULT_FOLLOWING_ASSOSIATION
 	}
 
-	if usm := NewUniverse(ji.UserFriends).SliceMatches([]uint64{112508646, 3657821880, 5463447056, 141656968, 4379286741, 972539685, 2046352519}); len(usm) > 0 {
-		return tracerr.New("friends assosiation")
+	if usm := universe.New(ji.UserFriends).SliceMatches([]uint64{112508646, 3657821880, 5463447056, 141656968, 4379286741, 972539685, 2046352519}); len(usm) > 0 {
+		return RESULT_FRIENDS_ASSOSIATION
 	}
 
-	return nil
+	return RESULT_SUCCESS
 }
 
-func checkBlacklist(cl *client, fi *FingerprintInfo) error {
-	blfr, err := cl.app.FindFirstRecordByFilter(
+func checkBlacklist(app *pocketbase.PocketBase, ip string, fi *FingerprintInfo) ResultType {
+	blfr, err := app.FindFirstRecordByFilter(
 		"fingerprint",
 		"key.blacklist != null && (exploitHwid = {:exploitHwid})",
 		dbx.Params{"exploitHwid": fi.ExploitHwid},
 	)
 
 	if blfr != nil && err == nil {
-		return tracerr.New("fingerprint blacklist")
+		return RESULT_FINGERPRINT_MATCH
 	}
 
-	blips, err := cl.app.FindRecordsByFilter(
+	blips, err := app.FindRecordsByFilter(
 		"fingerprint",
 		"key.blacklist != null && (ipAddress = {:ipAddress})",
-		"", 2, 0, dbx.Params{"ipAddress": cl.getRemoteAddr()},
+		"", 2, 0, dbx.Params{"ipAddress": ip},
 	)
 
 	if len(blips) >= 3 && err == nil {
-		return tracerr.New("ip blacklist")
+		return RESULT_IP_MATCH
 	}
 
-	return nil
+	return RESULT_SUCCESS
 }
 
 // check for changed device or exploit, new region or locale or dst change. then check for hwid change.
-func checkMismatch(en string, fi *FingerprintInfo, fr *core.Record, ar *core.Record, ai *AnalyticsInfo) error {
+func checkMismatch(fi *FingerprintInfo, fr *core.Record, ar *core.Record, ai *AnalyticsInfo, en string) ResultType {
 	if fr.GetString("exploitHwid") != fi.ExploitHwid {
-		return tracerr.New("hwid mismatch")
+		return RESULT_HWID_MISMATCH
 	}
 
 	if fr.GetString("exploitName") != en {
-		return tracerr.New("exploit mismatch")
+		return RESULT_EXPLOIT_MISMATCH
 	}
 
 	if fr.GetInt("deviceType") != int(fi.DeviceType) {
-		return tracerr.New("device type mismatch")
+		return RESULT_DEVICE_TYPE_MISMATCH
 	}
 
 	if ar.GetString("locale") != ai.SystemLocaleId {
-		return tracerr.New("locale mismatch")
+		return RESULT_LOCALE_MISMATCH
 	}
 
 	if ar.GetString("region") != ai.Region {
-		return tracerr.New("region mismatch")
+		return RESULT_REGION_MISMATCH
 	}
 
 	if ar.GetBool("dst") != ai.DaylightSavingsTime {
-		return tracerr.New("dst mismatch")
+		return RESULT_DST_MISMATCH
 	}
 
-	return nil
+	return RESULT_SUCCESS
 }

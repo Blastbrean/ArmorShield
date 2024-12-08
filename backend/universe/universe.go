@@ -1,8 +1,8 @@
-package main
+package universe
 
 type Universe map[uint64]bool
 
-func NewUniverse(ui []uint64) Universe {
+func New(ui []uint64) Universe {
 	u := make(Universe)
 
 	for _, i := range ui {
