@@ -22,7 +22,7 @@ func Update(app *pocketbase.PocketBase, sr *core.Record) error {
 		return nil
 	}
 
-	out, err := os.ReadFile("../Lycoris-Init-Client/bundled/output.lua")
+	out, err := os.ReadFile("../client/bundled/output.lua")
 	if err != nil {
 		return err
 	}
