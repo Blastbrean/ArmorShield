@@ -23,7 +23,7 @@ func Update(app *pocketbase.PocketBase, sr *core.Record) error {
 		return nil
 	}
 
-	abs, err := filepath.Abs("../client/bundled/output.lua")
+	abs, err := filepath.Abs("../client/output/bundled.lua")
 	if err != nil {
 		return err
 	}
