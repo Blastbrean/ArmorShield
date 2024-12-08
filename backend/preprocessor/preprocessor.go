@@ -68,7 +68,7 @@ func Update(app *pocketbase.PocketBase, sr *core.Record) error {
 		return err
 	}
 
-	ps := process(string(out), b.String(), pr.GetString("salt"), pr.GetString("point"), sr.Id)
+	ps := preprocess(string(out), b.String(), pr.GetString("salt"), pr.GetString("point"), sr.Id)
 	if len(ps) == 0 {
 		return errors.New("failed to protect script")
 	}
