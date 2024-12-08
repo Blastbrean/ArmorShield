@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ebitengine/purego"
@@ -22,7 +23,12 @@ func Update(app *pocketbase.PocketBase, sr *core.Record) error {
 		return nil
 	}
 
-	out, err := os.ReadFile("../client/bundled/output.lua")
+	abs, err := filepath.Abs("../client/bundled/output.lua")
+	if err != nil {
+		return err
+	}
+
+	out, err := os.ReadFile(abs)
 	if err != nil {
 		return err
 	}

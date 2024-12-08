@@ -2,10 +2,19 @@
 
 package preprocessor
 
-import "github.com/ebitengine/purego"
+import (
+	"path/filepath"
+
+	"github.com/ebitengine/purego"
+)
 
 func loadPreprocessor() (uintptr, error) {
-	return purego.Dlopen("../protector_lib/target/release/protector_lib.so", purego.RTLD_NOW|purego.RTLD_GLOBAL)
+	abs, err := filepath.Abs("../protector_lib/target/release/protector_lib.so")
+	if err != nil {
+		return uintptr(0x0), err
+	}
+
+	return purego.Dlopen(abs, purego.RTLD_NOW|purego.RTLD_GLOBAL)
 }
 
 func closeLibrary(handle uintptr) error {

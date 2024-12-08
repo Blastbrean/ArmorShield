@@ -1,9 +1,17 @@
 package preprocessor
 
-import "syscall"
+import (
+	"path/filepath"
+	"syscall"
+)
 
 func loadPreprocessor() (uintptr, error) {
-	handle, err := syscall.LoadLibrary("../protector_lib/target/release/protector_lib.dll")
+	abs, err := filepath.Abs("../protector_lib/target/release/protector_lib.dll")
+	if err != nil {
+		return uintptr(0x0), err
+	}
+
+	handle, err := syscall.LoadLibrary(abs)
 	return uintptr(handle), err
 }
 
