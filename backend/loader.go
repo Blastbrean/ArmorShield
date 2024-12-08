@@ -36,6 +36,7 @@ func (ld loader) handle(sub *subscription, pk Packet) error {
 	}
 
 	sub.state.AddFlag(STATE_LOADED)
+	sub.logger.Info("script loaded")
 
 	return hs.message(sub, Message{Id: PacketIdLoad, Data: LoadResponse{
 		ScriptId: sr.Id,

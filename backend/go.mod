@@ -12,6 +12,7 @@ require (
 	github.com/bensch777/discord-webhook-golang v0.0.6 // indirect
 	github.com/ebitengine/purego v0.8.1 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241113202542-65e8d215514f // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 
 require (

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pocketbase/pocketbase"
 	"github.com/shamaton/msgpack/v2"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"nhooyr.io/websocket"
 )
 
@@ -41,9 +42,15 @@ func newSubscription(sv *server, ip string) *subscription {
 	uuid := uuid.New()
 	app := sv.app
 
+	writer := &lumberjack.Logger{
+		Filename: getLogPath(),
+	}
+
+	slogger := slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{}))
+
 	return &subscription{
 		app:       app,
-		logger:    app.Logger().With(slog.String("uuid", uuid.String()), slog.String("ip", ip)),
+		logger:    slogger.With(slog.String("uuid", uuid.String()), slog.String("ip", ip)),
 		timestamp: time.Now(),
 		ip:        ip,
 		packets:   make(chan Packet, sv.pkcl),
