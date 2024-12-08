@@ -93,12 +93,14 @@ func (hs handshaker) handle(sub *subscription, pk Packet) error {
 		return err
 	}
 
-	st, err := hs.bs.pr.Salt()
+	pr := hs.bs.pr
+
+	st, err := pr.Salt()
 	if err != nil {
 		return err
 	}
 
-	bp, err := hs.bs.pr.Point()
+	bp, err := pr.Point()
 	if err != nil {
 		return err
 	}

@@ -65,7 +65,7 @@ func (kr *Key) Blacklisted() bool {
 }
 
 func (kr *Key) DiscordId() (string, error) {
-	di := kr.GetString("discordId")
+	di := kr.GetString("discord_id")
 	if len(di) <= 0 {
 		return "", errors.New("invalid discord id")
 	}
