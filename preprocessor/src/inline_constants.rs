@@ -1,4 +1,4 @@
-use darklua_core::{nodes::{BinaryNumber, Block, Expression, FunctionExpression, LocalAssignStatement, NumberExpression, StringExpression, TableEntry, TableIndexEntry}, process::{DefaultVisitor, NodeProcessor, NodeVisitor}, rules::{Context, FlawlessRule}};
+use darklua_core::{nodes::{Block, Expression, FunctionExpression, HexNumber, LocalAssignStatement, NumberExpression, StringExpression, TableEntry, TableIndexEntry}, process::{DefaultVisitor, NodeProcessor, NodeVisitor}, rules::{Context, FlawlessRule}};
 
 const SCRIPT_FUNCTIONS_TBL_IDENTIFIER: &str = "SCRIPT_FUNCTIONS";
 const SALT_TBL_IDENTIFIER: &str = "DB_HDKF_SALT";
@@ -17,7 +17,7 @@ impl InlineConstantsProcessor {
 
 fn append_byte_table_entries(entries: &mut Vec<TableEntry>, bytes: &[u8]) {
     for byte in bytes {
-        let expr = NumberExpression::Binary(BinaryNumber::new(*byte as u64, true));
+        let expr = NumberExpression::Hex(HexNumber::new(*byte as u64, false));
         entries.push(TableEntry::Value(Expression::Number(expr)));
     }
 }
