@@ -4,7 +4,7 @@ extern crate libc;
 use std::{ffi::{CStr, CString}, path::PathBuf, ptr::null};
 use inline_constants::InlineConstants;
 use base64::{prelude::BASE64_STANDARD, Engine};
-use darklua_core::{generator::{LuaGenerator, ReadableLuaGenerator}, rules::{ComputeExpression, ContextBuilder, ConvertIndexToField, ConvertLocalFunctionToAssign, FlawlessRule, GroupLocalAssignment, RemoveComments, RemoveFunctionCallParens, RenameVariables}, Parser, Resources};
+use darklua_core::{generator::{LuaGenerator, ReadableLuaGenerator}, rules::{ContextBuilder, FlawlessRule, RemoveComments, RemoveInterpolatedString}, Parser, Resources};
 
 #[no_mangle]
 pub extern "C" fn preprocess(loader: *const libc::c_char, source: *const libc::c_char, salt: *const libc::c_char, point: *const libc::c_char, id: *const libc::c_char) -> *const libc::c_char {
@@ -45,6 +45,7 @@ pub extern "C" fn preprocess(loader: *const libc::c_char, source: *const libc::c
     let context = ContextBuilder::new(PathBuf::new(), &resources, str_loader.as_str()).build();
     InlineConstants::new(source_block, salt, point, str_id).flawless_process(&mut loader_block, &context);
     RemoveComments::default().flawless_process(&mut loader_block, &context);
+    RemoveInterpolatedString::default().flawless_process(&mut loader_block, &context);
 
     let mut generator = ReadableLuaGenerator::new(usize::MAX);
     generator.write_block(&loader_block);
