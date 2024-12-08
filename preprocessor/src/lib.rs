@@ -4,7 +4,7 @@ extern crate libc;
 use std::{ffi::{CStr, CString}, path::PathBuf, ptr::null};
 use inline_constants::InlineConstants;
 use base64::{prelude::BASE64_STANDARD, Engine};
-use darklua_core::{generator::{DenseLuaGenerator, LuaGenerator}, rules::{ComputeExpression, ContextBuilder, ConvertIndexToField, ConvertLocalFunctionToAssign, FlawlessRule, GroupLocalAssignment, RemoveComments, RemoveFunctionCallParens, RenameVariables}, Parser, Resources};
+use darklua_core::{generator::{LuaGenerator, ReadableLuaGenerator}, rules::{ComputeExpression, ContextBuilder, ConvertIndexToField, ConvertLocalFunctionToAssign, FlawlessRule, GroupLocalAssignment, RemoveComments, RemoveFunctionCallParens, RenameVariables}, Parser, Resources};
 
 #[no_mangle]
 pub extern "C" fn preprocess(loader: *const libc::c_char, source: *const libc::c_char, salt: *const libc::c_char, point: *const libc::c_char, id: *const libc::c_char) -> *const libc::c_char {
@@ -52,8 +52,7 @@ pub extern "C" fn preprocess(loader: *const libc::c_char, source: *const libc::c
     ComputeExpression::default().flawless_process(&mut loader_block, &context);
     RenameVariables::default().flawless_process(&mut loader_block, &context);
 
-    // @note: have lines that don't bundle up into one when we need to debug something later while maintaining denseness
-    let mut generator = DenseLuaGenerator::new(140);
+    let mut generator = ReadableLuaGenerator::default();
     generator.write_block(&loader_block);
     
         
