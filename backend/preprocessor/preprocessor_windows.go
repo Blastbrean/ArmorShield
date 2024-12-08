@@ -6,7 +6,7 @@ import (
 )
 
 func loadPreprocessor() (uintptr, error) {
-	abs, err := filepath.Abs("../protector_lib/target/release/protector_lib.dll")
+	abs, err := filepath.Abs("../preprocessor/target/release/armorshield_preprocessor.dll")
 	if err != nil {
 		return uintptr(0x0), err
 	}
