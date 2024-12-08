@@ -45,12 +45,6 @@ pub extern "C" fn preprocess(loader: *const libc::c_char, source: *const libc::c
     let context = ContextBuilder::new(PathBuf::new(), &resources, str_loader.as_str()).build();
     InlineConstants::new(source_block, salt, point, str_id).flawless_process(&mut loader_block, &context);
     RemoveComments::default().flawless_process(&mut loader_block, &context);
-    ConvertIndexToField::default().flawless_process(&mut loader_block, &context);
-    ConvertLocalFunctionToAssign::default().flawless_process(&mut loader_block, &context);
-    GroupLocalAssignment::default().flawless_process(&mut loader_block, &context);
-    RemoveFunctionCallParens::default().flawless_process(&mut loader_block, &context);
-    ComputeExpression::default().flawless_process(&mut loader_block, &context);
-    RenameVariables::default().flawless_process(&mut loader_block, &context);
 
     let mut generator = ReadableLuaGenerator::new(usize::MAX);
     generator.write_block(&loader_block);
