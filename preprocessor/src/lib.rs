@@ -52,7 +52,7 @@ pub extern "C" fn preprocess(loader: *const libc::c_char, source: *const libc::c
     ComputeExpression::default().flawless_process(&mut loader_block, &context);
     RenameVariables::default().flawless_process(&mut loader_block, &context);
 
-    let mut generator = ReadableLuaGenerator::default();
+    let mut generator = ReadableLuaGenerator::new(usize::MAX);
     generator.write_block(&loader_block);
     
         
