@@ -9,7 +9,7 @@ import (
 )
 
 func loadPreprocessor() (uintptr, error) {
-	abs, err := filepath.Abs("../protector_lib/target/release/protector_lib.so")
+	abs, err := filepath.Abs("../preprocessor/target/release/libarmorshield_preprocessor.so")
 	if err != nil {
 		return uintptr(0x0), err
 	}
