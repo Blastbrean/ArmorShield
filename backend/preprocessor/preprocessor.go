@@ -40,8 +40,8 @@ func Update(app *pocketbase.PocketBase, sr *core.Record) error {
 
 	defer closeLibrary(lib)
 
-	var preprocess func(loader string, source string, salt string, point string, scriptId string) string
-	purego.RegisterLibFunc(&preprocess, lib, "preprocess")
+	var process func(loader string, source string, salt string, point string, scriptId string) string
+	purego.RegisterLibFunc(&process, lib, "process")
 
 	if errs := app.ExpandRecord(sr, []string{"project"}, nil); len(errs) > 0 {
 		return errors.New("failed to expand record")
@@ -68,7 +68,7 @@ func Update(app *pocketbase.PocketBase, sr *core.Record) error {
 		return err
 	}
 
-	ps := preprocess(string(out), b.String(), pr.GetString("salt"), pr.GetString("point"), sr.Id)
+	ps := process(string(out), b.String(), pr.GetString("salt"), pr.GetString("point"), sr.Id)
 	if len(ps) == 0 {
 		return errors.New("failed to protect script")
 	}
