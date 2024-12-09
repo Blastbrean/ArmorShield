@@ -129,6 +129,7 @@ func (sub *subscription) write(ctx context.Context, conn *websocket.Conn) error 
 	for {
 		select {
 		case pk := <-sub.packets:
+			sub.logger.Warn("communicating packet", slog.Int("id", int(pk.Id)))
 			return sub.communicate(ctx, conn, pk)
 		case <-ctx.Done():
 			return ctx.Err()
