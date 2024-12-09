@@ -110,16 +110,20 @@ func (sub *subscription) read(ctx context.Context, conn *websocket.Conn) error {
 	}
 }
 
+func (sub *subscription) communicate(ctx context.Context, conn *websocket.Conn, pk Packet) error {
+	ser, err := msgpack.Marshal(pk)
+	if err != nil {
+		return err
+	}
+
+	return conn.Write(ctx, websocket.MessageBinary, ser)
+}
+
 func (sub *subscription) write(ctx context.Context, conn *websocket.Conn) error {
 	for {
 		select {
 		case pk := <-sub.packets:
-			ser, err := msgpack.Marshal(pk)
-			if err != nil {
-				return err
-			}
-
-			return conn.Write(ctx, websocket.MessageBinary, ser)
+			return sub.communicate(ctx, conn, pk)
 		case <-ctx.Done():
 			return ctx.Err()
 		}
