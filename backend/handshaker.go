@@ -138,6 +138,9 @@ func (hs handshaker) handle(sub *subscription, pk Packet) error {
 		return err
 	}
 
+	sub.logger.Debug("server salt & point", slog.Any("salt", st), slog.Any("point", bp))
+	sub.logger.Debug("server encryption keys", slog.Any("rc4", hs.rc4), slog.Any("hmac", hs.hmac))
+
 	sub.state.AddFlag(STATE_HANDSHAKED)
 	sub.handshaker = &hs
 	sub.handler = identifier{hs: hs}

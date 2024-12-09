@@ -89,7 +89,7 @@ func (sv *server) subscribe(e *core.RequestEvent) error {
 	sv.add(sub)
 
 	defer sv.delete(sub)
-	defer sub.close("subscription finished")
+	defer sub.close("finished")
 
 	group, ctx := errgroup.WithContext(context.Background())
 
