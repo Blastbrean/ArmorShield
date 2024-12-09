@@ -156,7 +156,7 @@ function handshake_stage_handler:handle_packet(conn_data, pk)
 	self.rc4_key = hdkf.new(shared_key, DB_HDKF_SALT, sha2_256, { 0x00 }, 16):finish():as_bytes()
 	self.hmac_key = hdkf.new(shared_key, DB_HDKF_SALT, sha2_256, { 0x01 }, 32):finish():as_bytes()
 
-	conn_data.stage_handler = analytics_stage_handler.new(self.handshake_stage_handler)
+	conn_data.stage_handler = analytics_stage_handler.new(self)
 	conn_data.handshake_stage_handler = self
 	conn_data:set_client_stage(2)
 
