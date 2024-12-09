@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rc4"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"log/slog"
@@ -73,11 +74,11 @@ func (hs handshaker) unmarshal(sub *subscription, ba []byte, data interface{}) e
 
 	cipher.XORKeyStream(ct, ct)
 
+	defer sub.logger.Info("handshake unmarshal", slog.Any("ct", base64.StdEncoding.EncodeToString(ct)), slog.Any("data", data))
+
 	if err := msgpack.Unmarshal(ct, &data); err != nil {
 		return err
 	}
-
-	sub.logger.Info("handshake unmarshal", slog.Any("data", data))
 
 	return nil
 }
