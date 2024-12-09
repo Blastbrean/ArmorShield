@@ -162,7 +162,7 @@ function handshake_stage_handler:handle_packet(conn_data, pk)
 
 	logger.warn("calculating analytics information")
 
-	self.handshake_stage_handler:send_message(conn_data, 2, {
+	self:send_message(conn_data, 2, {
 		["KeyInfo"] = analytics.get_key_info(),
 		["SubInfo"] = analytics.get_sub_info(),
 	})
