@@ -144,11 +144,8 @@ local function serialize_array(value)
 		end
 	end
 
-
 	local result = table_concat(elements)
 	local length = #elements
-
-	length = length + 1
 
 	if length < 16 then
 		return string_pack(">B", 0x90 + length) .. result
