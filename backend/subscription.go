@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"time"
 
+	"armorshield/bpool"
+
 	"github.com/google/uuid"
 	"github.com/pocketbase/pocketbase"
 	"github.com/shamaton/msgpack/v2"
@@ -66,14 +68,17 @@ func (sub *subscription) read(ctx context.Context, conn *websocket.Conn, rdl int
 			return err
 		}
 
-		ba := make([]byte, rdl)
-		br, err := rr.Read(ba)
+		bp := bpool.Get()
+		defer bpool.Put(bp)
 
-		if br >= int(rdl) || br <= 0 || err != nil {
+		_, err = bp.ReadFrom(rr)
+		if err != nil {
 			return err
 		}
 
+		ba := bp.Bytes()
 		ds, err := hex.DecodeString(string(ba))
+
 		if err != nil {
 			return err
 		}

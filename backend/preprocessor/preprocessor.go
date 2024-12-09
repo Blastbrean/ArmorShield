@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"armorshield/bpool"
+
 	"github.com/ebitengine/purego"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
@@ -60,8 +62,8 @@ func Update(app *pocketbase.PocketBase, sr *core.Record) error {
 	blob, _ := fsys.GetFile(key)
 	defer blob.Close()
 
-	b := Get()
-	defer Put(b)
+	b := bpool.Get()
+	defer bpool.Put(b)
 
 	_, err = b.ReadFrom(io.LimitReader(blob, EXPECTED_SCRIPT_FILE_SIZE))
 	if err != nil {
