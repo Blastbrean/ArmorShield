@@ -102,15 +102,7 @@ func (sv *server) subscribe(e *core.RequestEvent) error {
 
 	sub.logger.Info("subscription to server", slog.Any("ip", sub.ip))
 
-	err = group.Wait()
-
-	sub.close("server is dropping")
-
-	if err != nil {
-		sub.logger.Error("group error", slog.String("error", err.Error()))
-	}
-
-	return err
+	return group.Wait()
 }
 
 func (sv *server) find(kr *Key) *subscription {
