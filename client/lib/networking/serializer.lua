@@ -145,12 +145,7 @@ local function serialize_array(value)
 	end
 
 
-	local result = nil
-
-	for i = 0, #elements do
-		result = (result or "") .. elements[i]
-	end
-
+	local result = table_concat(elements)
 	local length = #elements
 
 	length = length + 1
