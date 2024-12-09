@@ -80,9 +80,8 @@ func (sv *server) subscribe(e *core.RequestEvent) error {
 			return err
 		}
 
-		if err := sub.communicate(context.Background(), conn, Packet{Id: PacketIdDropping, Msg: ser}); err != nil {
-			return err
-		}
+		// NB: Ignore error here.
+		sub.communicate(context.Background(), conn, Packet{Id: PacketIdDropping, Msg: ser})
 
 		return conn.CloseNow()
 	}

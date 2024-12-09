@@ -66,9 +66,8 @@ func newSubscription(sv *server, ip string) *subscription {
 func (sub *subscription) read(ctx context.Context, conn *websocket.Conn) error {
 	for {
 		_, rr, err := conn.Reader(ctx)
-		_, ok := ctx.Deadline()
 
-		if ok && errors.Is(err, net.ErrClosed) {
+		if errors.Is(err, net.ErrClosed) {
 			return nil
 		}
 
