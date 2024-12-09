@@ -104,7 +104,11 @@ func (sv *server) subscribe(e *core.RequestEvent) error {
 
 	err = group.Wait()
 
-	sub.logger.Info("subscription closed", slog.Any("error", err))
+	sub.close("groups finished")
+
+	if err != nil {
+		sub.logger.Error("subscription error", slog.String("error", err.Error()))
+	}
 
 	return err
 }
