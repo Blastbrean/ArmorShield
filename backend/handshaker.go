@@ -46,7 +46,7 @@ func (hs handshaker) marshal(sub *subscription, data interface{}) ([]byte, error
 		return nil, err
 	}
 
-	sub.logger.Info("handshake marshal", slog.String("data", string(ba)))
+	sub.logger.Info("handshake marshal", slog.Any("data", data))
 
 	cr, err := rc4.NewCipher(hs.rc4[:])
 	if err != nil {
