@@ -2,7 +2,7 @@
 local stage_handler = require("lib.stage_handlers.stage_handler")
 
 ---@class load_stage_handler: stage_handler
----@field established_stage_handler established_stage_handler
+---@field analytics_stage_handler analytics_stage_handler
 -- handle script loading
 local load_stage_handler = setmetatable({}, { __index = stage_handler })
 
@@ -50,7 +50,7 @@ end
 function load_stage_handler:handle_packet(conn_data, pk)
 	logger.warn("load gate (%i, %i)", pk.Id, conn_data.current_stage)
 
-	local load_msg = self.established_stage_handler.handshake_stage_handler:unmarshal_one(conn_data, pk.Msg)
+	local load_msg = self.analytics_stage_handler.handshake_stage_handler:unmarshal_one(conn_data, pk.Msg)
 	if not load_msg then
 		return logger.fatal("failed to deserialize load data")
 	end
@@ -59,7 +59,7 @@ function load_stage_handler:handle_packet(conn_data, pk)
 
 	local lycoris_init = {}
 	lycoris_init.add_key_update_listener = create_script_export(conn_data, add_key_update_listener)
-	lycoris_init.current_role = self.established_stage_handler.current_role
+	lycoris_init.current_role = self.analytics_stage_handler.current_role
 	lycoris_init.key = script_key
 
 	local safe_exports = new_proxy(true)
@@ -75,7 +75,7 @@ function load_stage_handler:handle_packet(conn_data, pk)
 	conn_data.script_task = task_defer(load_function)
 	conn_data.lycoris_init = lycoris_init
 	conn_data.key_update_stage_handler =
-		key_update_stage_handler.new(self.established_stage_handler.handshake_stage_handler)
+		key_update_stage_handler.new(self.analytics_stage_handler.handshake_stage_handler)
 
 	logger.warn("script loaded in %.2f seconds with role %s", os_clock() - start_timestamp, lycoris_init.current_role)
 end
@@ -83,22 +83,22 @@ end
 ---load stage handler's packet id
 ---@return packet_id
 function load_stage_handler:handle_packet_id()
-	return 4
+	return 3
 end
 
 ---load stage handler's client stage
 ---@return client_stage
 function load_stage_handler:handle_client_stage()
-	return 4
+	return 3
 end
 
 ---new load stage handler object
----@param established_stage_handler established_stage_handler
+---@param analytics_stage_handler analytics_stage_handler
 ---@return load_stage_handler
-function load_stage_handler.new(established_stage_handler)
+function load_stage_handler.new(analytics_stage_handler)
 	-- create new load stage handler object
 	local self = setmetatable(stage_handler.new(), { __index = load_stage_handler })
-	self.established_stage_handler = established_stage_handler
+	self.analytics_stage_handler = analytics_stage_handler
 
 	-- return new load stage handler object
 	return self

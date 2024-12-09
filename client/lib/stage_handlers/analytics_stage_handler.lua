@@ -41,13 +41,13 @@ end
 ---analytics stage handler's packet id
 ---@return packet_id
 function analytics_stage_handler:handle_packet_id()
-	return 3
+	return 2
 end
 
 ---analytics stage handler's client stage
 ---@return client_stage
 function analytics_stage_handler:handle_client_stage()
-	return 3
+	return 2
 end
 
 ---new analytics stage handler object
