@@ -88,7 +88,9 @@ func (sv *server) subscribe(e *core.RequestEvent) error {
 	}
 
 	sv.add(sub)
+
 	defer sv.delete(sub)
+	defer sub.close("subscription finished")
 
 	group, ctx := errgroup.WithContext(context.Background())
 
@@ -103,8 +105,6 @@ func (sv *server) subscribe(e *core.RequestEvent) error {
 	sub.logger.Info("subscription to server")
 
 	err = group.Wait()
-
-	sub.close("groups finished")
 
 	if err != nil {
 		sub.logger.Error("subscription error", slog.String("error", err.Error()))
