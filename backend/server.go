@@ -100,7 +100,7 @@ func (sv *server) subscribe(e *core.RequestEvent) error {
 		return sub.write(ctx, conn)
 	})
 
-	sub.logger.Info("subscription to server", slog.Any("ip", sub.ip))
+	sub.logger.Info("subscription to server")
 
 	return group.Wait()
 }
