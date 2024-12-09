@@ -90,7 +90,7 @@ func (id *identifier) identifiers(sub *subscription, ir *IdentifyRequest) (*core
 		return nil, nil, nil, nil, err
 	}
 
-	fr, err := record.ExpectLinkedRecord(sub.app, kr.Record, "analytics", map[string]any{
+	fr, err := record.ExpectLinkedRecord(sub.app, kr.Record, "fingerprints", map[string]any{
 		"deviceType":  fi.DeviceType,
 		"exploitHwid": fi.ExploitHwid,
 		"exploitName": bs.en,
