@@ -3,5 +3,5 @@
 package main
 
 func getLogPath() string {
-	return "/home/armorshield/armorshield.log"
+	return "logs/armorshield.log"
 }
