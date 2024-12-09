@@ -103,7 +103,7 @@ func (bs bootstrapper) handle(sub *subscription, pk Packet) error {
 
 	kr, err := FindKeyById(sub.app, br.KeyId)
 	if err != nil {
-		return err
+		return sub.close("key not found")
 	}
 
 	di, err := kr.DiscordId()

@@ -102,7 +102,11 @@ func (sv *server) subscribe(e *core.RequestEvent) error {
 
 	sub.logger.Info("subscription to server")
 
-	return group.Wait()
+	err = group.Wait()
+
+	sub.logger.Info("subscription closed", slog.Any("error", err))
+
+	return err
 }
 
 func (sv *server) find(kr *Key) *subscription {
