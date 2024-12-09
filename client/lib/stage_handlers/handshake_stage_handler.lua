@@ -39,8 +39,14 @@ local hmac = require("lib.mac.hmac")
 ---@module lib.cipher.rc4
 local rc4 = require("lib.cipher.rc4")
 
----@module lib.stage_handlers.established_stage_handler
-local established_stage_handler = require("lib.stage_handlers.established_stage_handler")
+---@module lib.stage_handlers.analytics_stage_handler
+local analytics_stage_handler = require("lib.stage_handlers.analytics_stage_handler")
+
+---@module lib.internal.analytics
+local analytics = require("lib.internal.analytics")
+
+---@module lib.logger
+local logger = require("lib.logger")
 
 ---@module lib.profiler
 local profiler = require("lib.profiler")
@@ -150,13 +156,15 @@ function handshake_stage_handler:handle_packet(conn_data, pk)
 	self.rc4_key = hdkf.new(shared_key, DB_HDKF_SALT, sha2_256, { 0x00 }, 16):finish():as_bytes()
 	self.hmac_key = hdkf.new(shared_key, DB_HDKF_SALT, sha2_256, { 0x01 }, 32):finish():as_bytes()
 
-	conn_data.stage_handler = established_stage_handler.new(self)
+	conn_data.stage_handler = analytics_stage_handler.new(self.handshake_stage_handler)
 	conn_data.handshake_stage_handler = self
 	conn_data:set_client_stage(2)
 
-	self:send_message(conn_data, 2, {
-		["SubId"] = self.boot_stage_handler.subscription_id,
-		["BaseTimestamp"] = self.boot_stage_handler.timestamp,
+	logger.warn("calculating analytics information")
+
+	self.handshake_stage_handler:send_message(conn_data, 2, {
+		["KeyInfo"] = analytics.get_key_info(),
+		["SubInfo"] = analytics.get_sub_info(),
 	})
 end
 

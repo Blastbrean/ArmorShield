@@ -1,9 +1,8 @@
 ---@alias client_stage
 ---| '0' During or after bootstrapping has been finished
 ---| '1' Waiting for the handshake process to be finished
----| '2' Waiting for the establishment process to be finished
----| '3' Waiting for the identification process to be finished
----| '4' During or after the client loading process has been finished
+---| '2' Waiting for the identification process to be finished
+---| '3' During or after the client loading process has been finished
 
 ---@class connection_data
 ---@field data_listeners function[]
@@ -125,11 +124,11 @@ function connection_data:handle_packet(data)
 		pk.Id
 	)
 
-	if pk.Id == 5 then
+	if pk.Id == 4 then
 		return self:handle_drop(pk.Msg)
 	end
 
-	if pk.Id == 6 then
+	if pk.Id == 5 then
 		return self.key_update_stage_handler and self.key_update_stage_handler:handle_packet(self, pk)
 	end
 

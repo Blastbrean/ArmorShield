@@ -26,12 +26,12 @@ function analytics_stage_handler:handle_packet(conn_data, pk)
 	logger.warn("setting up loading stage")
 
 	conn_data.stage_handler = load_stage_handler.new(self)
-	conn_data:set_client_stage(4)
+	conn_data:set_client_stage(3)
 
 	logger.warn("requesting loading for universe id %i", game.GameId)
 
 	self.current_role = analytics_msg["CurrentRole"]
-	self.handshake_stage_handler:send_message(conn_data, 4, {
+	self.handshake_stage_handler:send_message(conn_data, 3, {
 		["GameId"] = game.GameId,
 	})
 

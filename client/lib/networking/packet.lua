@@ -1,12 +1,10 @@
 ---@alias packet_id
 ---| '0' Bootstrap the entire connection
 ---| '1' Handshake between both parties to establish SWS
----| '2' Report suspicious events
----| '3' Mutal agreeement that the SWS tunnel was established
----| '4' Identify the client
----| '5' Send the script to the client
----| '6' Connection is closing and we are being sent a reason
----| '7' Key data is being updated
+---| '2' Identify the client
+---| '3' Send the script to the client
+---| '4' Connection is closing and we are being sent a reason
+---| '5' Key data is being updated
 
 ---@class packet
 ---@field Id packet_id
