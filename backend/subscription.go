@@ -37,6 +37,7 @@ type subscription struct {
 	ip           string
 	packets      chan Packet
 	handler      handler
+	closing      bool
 	close        func(reason string) error
 }
 

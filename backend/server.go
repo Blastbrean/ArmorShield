@@ -60,9 +60,17 @@ func (sv *server) subscribe(e *core.RequestEvent) error {
 
 	sub := newSubscription(sv, e.RealIP())
 	sub.close = func(reason string) error {
+		if sub.closing {
+			return errors.New("a close was already attempted")
+		}
+
+		sub.closing = true
+
 		if conn == nil {
 			return errors.New("no connection to close")
 		}
+
+		sub.logger.Error("subscription closing", slog.String("reason", reason))
 
 		ser, err := msgpack.Marshal(DropPacket{
 			Reason: reason,
@@ -92,10 +100,17 @@ func (sv *server) subscribe(e *core.RequestEvent) error {
 		return sub.write(ctx, conn)
 	})
 
-	app := sv.app
-	app.Logger().Info("subscription to server", slog.Any("ip", sub.ip))
+	sub.logger.Info("subscription to server", slog.Any("ip", sub.ip))
 
-	return group.Wait()
+	err = group.Wait()
+
+	sub.close("server is dropping")
+
+	if err != nil {
+		sub.logger.Error("group error", slog.String("error", err.Error()))
+	}
+
+	return err
 }
 
 func (sv *server) find(kr *Key) *subscription {
