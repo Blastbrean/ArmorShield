@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -44,6 +45,8 @@ func (hs handshaker) marshal(sub *subscription, data interface{}) ([]byte, error
 		return nil, err
 	}
 
+	sub.logger.Info("handshake marshal", slog.String("data", string(ba)))
+
 	cr, err := rc4.NewCipher(hs.rc4[:])
 	if err != nil {
 		return nil, err
@@ -74,6 +77,8 @@ func (hs handshaker) unmarshal(sub *subscription, ba []byte, data interface{}) e
 		return err
 	}
 
+	sub.logger.Info("handshake unmarshal", slog.Any("data", data))
+
 	return nil
 }
 
@@ -83,7 +88,7 @@ func (hs handshaker) message(sub *subscription, msg Message) error {
 		return err
 	}
 
-	return sub.message(Message{Id: msg.Id, Data: ser})
+	return sub.packet(Packet{Id: msg.Id, Msg: ser})
 }
 
 func (hs handshaker) handle(sub *subscription, pk Packet) error {

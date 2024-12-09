@@ -55,7 +55,6 @@ deserializer_stream.string = LPH_NO_VIRTUALIZE(function(self, len)
 	local src = self.source
 
 	---@reversal: without this - the code will be so slow because of 400k+ concat instructions!
-	---only thing preventing us from fully preventing function hooks from dumping the entire source before loadstring.
 	---also, LPH_NO_VIRTUALIZE calls exposing everything (but i want <5s loads - and it worked well enough in the last loader.) :(
 
 	local buf = buffer.create(len)

@@ -85,6 +85,8 @@ func (sub *subscription) read(ctx context.Context, conn *websocket.Conn, rdl int
 			return err
 		}
 
+		sub.logger.Info("handling packet", slog.String("data", string(ba)), slog.Int("id", int(pk.Id)))
+
 		hr := sub.handler
 
 		if hr == nil {
@@ -133,6 +135,8 @@ func (sub *subscription) message(msg Message) error {
 	if err != nil {
 		return err
 	}
+
+	sub.logger.Info("sending message", slog.Int("id", int(msg.Id)), slog.Any("data", msg.Data))
 
 	return sub.packet(Packet{Id: msg.Id, Msg: ser})
 }
