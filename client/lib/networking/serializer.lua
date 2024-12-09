@@ -43,10 +43,6 @@ local utf8_len = utf8.len
 local function is_an_array(tbl)
 	local expected = 1
 
-	if tbl["__force_zero_array"] then
-		return true
-	end
-
 	for k in next, tbl do
 		if k ~= expected then
 			return false
@@ -142,33 +138,22 @@ end
 local function serialize_array(value)
 	local elements = {}
 
-	if not value["__force_zero_array"] then
-		for i, v in pairs(value) do
-			if type(v) ~= "function" and type(v) ~= "thread" and type(v) ~= "userdata" then
-				elements[i] = serializer.marshal(v)
-			end
-		end
-	else
-		for i = 0, #value do
-			elements[i] = serializer.marshal(value[i])
+	for i, v in pairs(value) do
+		if type(v) ~= "function" and type(v) ~= "thread" and type(v) ~= "userdata" then
+			elements[i] = serializer.marshal(v)
 		end
 	end
 
+
 	local result = nil
 
-	if not value["__force_zero_array"] then
-		result = table_concat(elements)
-	else
-		for i = 0, #elements do
-			result = (result or "") .. elements[i]
-		end
+	for i = 0, #elements do
+		result = (result or "") .. elements[i]
 	end
 
 	local length = #elements
 
-	if value["__force_zero_array"] then
-		length = length + 1
-	end
+	length = length + 1
 
 	if length < 16 then
 		return string_pack(">B", 0x90 + length) .. result

@@ -220,6 +220,10 @@ function analytics.scan_log_history(look_back_amount)
 	for i = #log_entries, 1, -1 do
 		local log_entry = log_entries[i]
 
+		if utf8.len(log_entry.message) then
+			continue
+		end
+
 		log_history[#log_history + 1] = log_entry.message
 
 		if i > math.max(#log_entries - look_back_amount, 0) then
