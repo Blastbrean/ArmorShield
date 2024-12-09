@@ -93,7 +93,7 @@ func (sv *server) subscribe(e *core.RequestEvent) error {
 	group, ctx := errgroup.WithContext(context.Background())
 
 	group.Go(func() error {
-		return sub.read(ctx, conn, sv.rdl)
+		return sub.read(ctx, conn)
 	})
 
 	group.Go(func() error {

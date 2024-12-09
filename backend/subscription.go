@@ -62,7 +62,7 @@ func newSubscription(sv *server, ip string) *subscription {
 	}
 }
 
-func (sub *subscription) read(ctx context.Context, conn *websocket.Conn, rdl int64) error {
+func (sub *subscription) read(ctx context.Context, conn *websocket.Conn) error {
 	for {
 		_, rr, err := conn.Reader(ctx)
 		if err != nil {
