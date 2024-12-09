@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"log/slog"
+	"net"
 	"time"
 
 	"armorshield/bpool"
@@ -65,6 +66,12 @@ func newSubscription(sv *server, ip string) *subscription {
 func (sub *subscription) read(ctx context.Context, conn *websocket.Conn) error {
 	for {
 		_, rr, err := conn.Reader(ctx)
+		_, ok := ctx.Deadline()
+
+		if ok && errors.Is(err, net.ErrClosed) {
+			return nil
+		}
+
 		if err != nil {
 			return err
 		}
