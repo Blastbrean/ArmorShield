@@ -68,8 +68,6 @@ func (id *identifier) identifiers(sub *subscription, ir *IdentifyRequest) (*core
 	bs := id.hs.bs
 	kr := bs.kr
 
-	sub.logger.Info("current analytics information", slog.Any("request", ir))
-
 	sbr, err := record.Create(sub.app, "subscriptions", map[string]any{
 		"key": kr.Id,
 		"sid": sub.uuid.String(),
