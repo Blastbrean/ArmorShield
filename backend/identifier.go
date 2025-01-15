@@ -116,6 +116,8 @@ func (id *identifier) identifiers(sub *subscription, ir *IdentifyRequest) (*core
 
 	jr, err := record.ExpectLinkedRecord(sub.app, kr.Record, "joins", map[string]any{
 		"userId":       ji.UserId,
+		"userName":     ji.UserName,
+		"accountAge":   ji.AccountAge,
 		"placeId":      ji.PlaceId,
 		"subscription": sbr.Id,
 	})
@@ -159,7 +161,7 @@ func (id identifier) handle(sub *subscription, pk Packet) error {
 	}
 
 	if rt := checkAssosiation(&ji); rt != RESULT_SUCCESS {
-		sub.logger.Warn("account is associated to marked users", slog.Any("type", rt))
+		sub.logger.Warn("key is associated to marked users", slog.Any("type", rt))
 	}
 
 	var state Bitmask

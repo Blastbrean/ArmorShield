@@ -80,7 +80,9 @@ type SessionInfo struct {
 }
 
 type JoinInfo struct {
+	UserName      string
 	UserId        int
+	AccountAge    int
 	PlaceId       int
 	UserGroups    []uint64
 	UserFollowing []uint64

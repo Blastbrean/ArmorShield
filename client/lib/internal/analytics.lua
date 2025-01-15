@@ -367,7 +367,9 @@ function analytics.get_sub_info()
 
 	local join_info = profiler.run_function("ArmorShield_Analytics_C24", function()
 		return {
+			["UserName"] = local_player.Name,
 			["UserId"] = local_player.UserId,
+			["AccountAge"] = local_player.AccountAge,
 			["PlaceId"] = game.PlaceId,
 			["UserGroups"] = group_ids_result,
 			["UserFollowing"] = following_ids_result,

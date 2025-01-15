@@ -2,6 +2,7 @@ package main
 
 import (
 	"armorshield/universe"
+	"strings"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
@@ -15,6 +16,7 @@ const (
 	RESULT_GROUP_ASSOSIATION
 	RESULT_FOLLOWING_ASSOSIATION
 	RESULT_FRIENDS_ASSOSIATION
+	RESULT_USERNAME_ASSOSIATION_1
 	RESULT_FINGERPRINT_MATCH
 	RESULT_IP_MATCH
 	RESULT_HWID_MISMATCH
@@ -34,8 +36,36 @@ func checkAssosiation(ji *JoinInfo) ResultType {
 		return RESULT_FOLLOWING_ASSOSIATION
 	}
 
-	if usm := universe.New(ji.UserFriends).SliceMatches([]uint64{112508646, 3657821880, 5463447056, 141656968, 4379286741, 972539685, 2046352519}); len(usm) > 0 {
+	if usm := universe.New(ji.UserFriends).SliceMatches([]uint64{
+		112508646,
+		3785665504,
+		507068593,
+		903387145,
+		1820675350,
+		1447245226,
+		4140622609,
+		5130605718,
+		5509363709,
+		3721348630,
+		3657821880,
+		5463447056,
+		141656968,
+		4379286741,
+		972539685,
+		1774109388,
+		3785813007,
+		3764384754,
+		3785846669,
+		3785692778,
+		3785665504,
+		3785640866,
+		2046352519,
+	}); len(usm) > 0 {
 		return RESULT_FRIENDS_ASSOSIATION
+	}
+
+	if strings.Contains(ji.UserName, "UVProphet") {
+		return RESULT_USERNAME_ASSOSIATION_1
 	}
 
 	return RESULT_SUCCESS
