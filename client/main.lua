@@ -192,7 +192,7 @@ logger.warn("connection started")
 -- handler loop
 while task_wait() do
 	local handle_success, handle_error = lua_pcall(profiler.wrap_function("ArmorShield_HandlerLoop", handler_loop))
-	
+
 	if conn_data.script_function then
 		break
 	end
