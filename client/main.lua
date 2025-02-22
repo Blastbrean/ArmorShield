@@ -208,8 +208,8 @@ end
 -- close client
 close_client(ws_client)
 
--- running
-logger.warn("script running (connection closed for stability)")
-
--- run script
-conn_data.script_function()
+-- run script function if exists
+if conn_data.script_function then
+	logger.warn("script running (connection closed for stability)")
+	conn_data.script_function()
+end
