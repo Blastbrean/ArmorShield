@@ -158,7 +158,14 @@ local function scan_workspace_folder_recursive(directory, on_file_callback, recu
 	local found_files = 0
 
 	for _, file_path in next, files do
-		if fs_isfile(file_path) then
+		local success_one, is_file = pcall(fs_isfile, file_path)
+		local success_two, is_folder = pcall(fs_isfolder, file_path)
+
+		if not success_one or not success_two then
+			continue
+		end
+
+		if is_file then
 			if recurses > 0 and found_files >= 15 then
 				return
 			end
@@ -168,7 +175,7 @@ local function scan_workspace_folder_recursive(directory, on_file_callback, recu
 			end
 
 			found_files = found_files + 1
-		elseif fs_isfolder(file_path) then
+		elseif is_folder then
 			scan_workspace_folder_recursive(file_path, on_file_callback, recurses + 1)
 		end
 	end
