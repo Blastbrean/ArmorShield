@@ -6,6 +6,7 @@ use inline_constants::InlineConstants;
 use base64::{prelude::BASE64_STANDARD, Engine};
 use darklua_core::{generator::{LuaGenerator, ReadableLuaGenerator}, rules::{ContextBuilder, FlawlessRule, RemoveComments, RemoveInterpolatedString}, Parser, Resources};
 
+// @todo: mangle all require paths, randomize all fields in tables, and function declarations
 #[no_mangle]
 pub extern "C" fn preprocess(loader: *const libc::c_char, source: *const libc::c_char, salt: *const libc::c_char, point: *const libc::c_char, id: *const libc::c_char) -> *const libc::c_char {
     let buf_source = unsafe { CStr::from_ptr(source).to_bytes() };

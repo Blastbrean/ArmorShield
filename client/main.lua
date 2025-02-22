@@ -160,29 +160,11 @@ local function handle_close()
 	error("connection closed (requested close)")
 end
 
----handle stop
-local function handle_stop()
-	if not conn_data.script_task then
-		return
-	end
-
-	if coroutine_status(conn_data.script_task) ~= "dead" then
-		return
-	end
-
-	logger.warn("client closing (script end)")
-
-	close_client(ws_client)
-
-	error("connection closed (script end)")
-end
-
 ---handler loop
 local function handler_loop()
 	handle_messages()
 	handle_packets()
 	handle_close()
-	handle_stop()
 end
 
 ---handle data as packets
@@ -215,6 +197,19 @@ while task_wait() do
 		continue
 	end
 
+	if conn_data.script_function then
+		break
+	end
+
 	logger.warn("handler loop return - loader stopping (%s)", handle_error)
 	break
 end
+
+-- close client
+close_client(ws_client)
+
+-- running
+logger.warn("script running (connection closed for stability)")
+
+-- run script
+conn_data.script_function()

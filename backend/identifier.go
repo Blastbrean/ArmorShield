@@ -152,7 +152,7 @@ func (id identifier) handle(sub *subscription, pk Packet) error {
 		return bs.blacklist(sub, "invalid lua version")
 	}
 
-	if rt := checkBlacklist(app, sub.ip, &fi); rt != RESULT_SUCCESS {
+	if rt := checkBlacklist(app, sub.ip, &fi, &si); rt != RESULT_SUCCESS {
 		return bs.blacklist(sub, fmt.Sprintf("linked key with blacklist (%d)", rt))
 	}
 
@@ -160,8 +160,8 @@ func (id identifier) handle(sub *subscription, pk Packet) error {
 		return sub.close(fmt.Sprintf("reset your HWID on the panel (%d)", rt))
 	}
 
-	if rt := checkAssosiation(&ji); rt != RESULT_SUCCESS {
-		sub.logger.Warn("key is associated to marked users", slog.Any("type", rt))
+	if rt := checkAssosiation(&ji); len(rt) > 0 {
+		sub.logger.Warn("key is associated to marked users", slog.Any("types", rt))
 	}
 
 	var state Bitmask

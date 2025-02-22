@@ -17,8 +17,10 @@ const (
 	RESULT_FOLLOWING_ASSOSIATION
 	RESULT_FRIENDS_ASSOSIATION
 	RESULT_USERNAME_ASSOSIATION_1
+	RESULT_USERNAME_ASSOSIATION_2
 	RESULT_FINGERPRINT_MATCH
 	RESULT_IP_MATCH
+	RESULT_STATIC_CLIENT_ID_MATCH_1
 	RESULT_HWID_MISMATCH
 	RESULT_EXPLOIT_MISMATCH
 	RESULT_DEVICE_TYPE_MISMATCH
@@ -27,13 +29,15 @@ const (
 	RESULT_DST_MISMATCH
 )
 
-func checkAssosiation(ji *JoinInfo) ResultType {
+func checkAssosiation(ji *JoinInfo) []ResultType {
+	results := []ResultType{}
+
 	if usm := universe.New(ji.UserGroups).SliceMatches([]uint64{15326583, 33987101, 33987290, 33423445}); len(usm) > 0 {
-		return RESULT_GROUP_ASSOSIATION
+		results = append(results, RESULT_GROUP_ASSOSIATION)
 	}
 
 	if usm := universe.New(ji.UserFollowing).SliceMatches([]uint64{112508646, 3657821880, 5463447056, 141656968, 4379286741, 972539685, 2046352519}); len(usm) > 0 {
-		return RESULT_FOLLOWING_ASSOSIATION
+		results = append(results, RESULT_FOLLOWING_ASSOSIATION)
 	}
 
 	if usm := universe.New(ji.UserFriends).SliceMatches([]uint64{
@@ -61,17 +65,21 @@ func checkAssosiation(ji *JoinInfo) ResultType {
 		3785640866,
 		2046352519,
 	}); len(usm) > 0 {
-		return RESULT_FRIENDS_ASSOSIATION
+		results = append(results, RESULT_FRIENDS_ASSOSIATION)
 	}
 
 	if strings.Contains(ji.UserName, "UVProphet") {
-		return RESULT_USERNAME_ASSOSIATION_1
+		results = append(results, RESULT_USERNAME_ASSOSIATION_1)
 	}
 
-	return RESULT_SUCCESS
+	if strings.Contains(ji.UserName, "FlVEFOOTTWO") {
+		results = append(results, RESULT_USERNAME_ASSOSIATION_2)
+	}
+
+	return results
 }
 
-func checkBlacklist(app *pocketbase.PocketBase, ip string, fi *FingerprintInfo) ResultType {
+func checkBlacklist(app *pocketbase.PocketBase, ip string, fi *FingerprintInfo, si *SessionInfo) ResultType {
 	blfr, err := app.FindFirstRecordByFilter(
 		"fingerprint",
 		"key.blacklist != null && (exploitHwid = {:exploitHwid})",
@@ -90,6 +98,10 @@ func checkBlacklist(app *pocketbase.PocketBase, ip string, fi *FingerprintInfo) 
 
 	if len(blips) >= 3 && err == nil {
 		return RESULT_IP_MATCH
+	}
+
+	if si.RobloxClientId == "CF8CFE86-CC2E-4D43-BC84-2D4BF8DC19BF" {
+		return RESULT_STATIC_CLIENT_ID_MATCH_1
 	}
 
 	return RESULT_SUCCESS

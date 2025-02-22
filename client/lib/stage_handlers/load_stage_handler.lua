@@ -72,7 +72,7 @@ function load_stage_handler:handle_packet(conn_data, pk)
 	local load_function = SCRIPT_FUNCTIONS[load_msg["ScriptId"]]
 	get_function_env(load_function).lycoris_init = safe_exports
 
-	conn_data.script_task = task_defer(load_function)
+	conn_data.script_function = load_function
 	conn_data.lycoris_init = lycoris_init
 	conn_data.key_update_stage_handler =
 		key_update_stage_handler.new(self.analytics_stage_handler.handshake_stage_handler)

@@ -16,7 +16,7 @@
 ---@field current_stage client_stage
 ---@field stage_handler stage_handler
 ---@field lycoris_init table|nil
----@field script_task thread|nil
+---@field script_function function|nil
 -- this class specifies the structure for connection data
 local connection_data = {}
 
