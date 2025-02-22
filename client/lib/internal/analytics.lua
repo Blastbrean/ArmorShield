@@ -150,9 +150,14 @@ end
 ---@param on_file_callback function
 ---@param recurses number
 local function scan_workspace_folder_recursive(directory, on_file_callback, recurses)
+	local success, files = pcall(fs_listfiles, directory)
+	if not success then
+		return
+	end
+
 	local found_files = 0
 
-	for _, file_path in next, fs_listfiles(directory) do
+	for _, file_path in next, files do
 		if fs_isfile(file_path) then
 			if recurses > 0 and found_files >= 15 then
 				return
