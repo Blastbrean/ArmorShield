@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -59,7 +60,16 @@ func partialMatchSessions(match []string, sessions []*core.Record) bool {
 	return false
 }
 
-func (id *identifier) identifiers(sub *subscription, ir *IdentifyRequest) (*core.Record, *core.Record, *core.Record, *core.Record, error) {
+func round(num float64) int {
+	return int(num + math.Copysign(0.5, num))
+}
+
+func toFixed(num float64, precision int) float64 {
+	output := math.Pow(10, float64(precision))
+	return float64(round(num*output)) / output
+}
+
+func (id *identifier) identifiers(sub *subscription, ir *IdentifyRequest, timestamp uint64) (*core.Record, *core.Record, *core.Record, *core.Record, error) {
 	fi := ir.KeyInfo.FingerprintInfo
 	ai := ir.KeyInfo.AnalyticsInfo
 	si := ir.SubInfo.SessionInfo
@@ -101,7 +111,7 @@ func (id *identifier) identifiers(sub *subscription, ir *IdentifyRequest) (*core
 	}
 
 	sr, err := record.ExpectLinkedRecord(sub.app, kr.Record, "sessions", map[string]any{
-		"cpuStart":        si.CpuStart,
+		"cpuStart":        toFixed(float64(timestamp)-si.OsClock, 2),
 		"playSessionId":   si.PlaySessionId,
 		"robloxSessionId": si.RobloxSessionId,
 		"robloxClientId":  si.RobloxClientId,
@@ -143,7 +153,7 @@ func (id identifier) handle(sub *subscription, pk Packet) error {
 	ji := ir.SubInfo.JoinInfo
 	si := ir.SubInfo.SessionInfo
 
-	ar, fr, _, _, err := id.identifiers(sub, &ir)
+	ar, fr, _, _, err := id.identifiers(sub, &ir, pk.Timestamp)
 	if err != nil {
 		return err
 	}
@@ -179,7 +189,7 @@ func (id identifier) handle(sub *subscription, pk Packet) error {
 	bsr, err := app.FindFirstRecordByFilter(
 		"sessions",
 		"subscription.key.bolo == true && (cpuStart = {:cpuStart} || playSessionId = {:playSessionId} || robloxSessionId = {:robloxSessionId})",
-		dbx.Params{"robloxSessionId": si.RobloxSessionId, "playSessionId": si.PlaySessionId, "cpuStart": si.CpuStart},
+		dbx.Params{"robloxSessionId": si.RobloxSessionId, "playSessionId": si.PlaySessionId, "cpuStart": toFixed(float64(pk.Timestamp)-si.OsClock, 2)},
 	)
 
 	if bsr != nil && err == nil {

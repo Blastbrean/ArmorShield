@@ -2,8 +2,9 @@ package main
 
 // The message format that the server expects from the client.
 type Packet struct {
-	Id  byte
-	Msg []byte
+	Id        byte
+	Msg       []byte
+	Timestamp uint64
 }
 
 // A internal packet with an object instead of a byte slice.
@@ -31,7 +32,7 @@ const (
 	PacketIdLoad
 	PacketIdDropping
 	PacketIdKeyUpdate
-	PacketIdHeartbeat
+	PacketIdFreeze
 )
 
 type BootRequest struct {
@@ -71,7 +72,7 @@ type FingerprintInfo struct {
 }
 
 type SessionInfo struct {
-	CpuStart        float64
+	OsClock         float64
 	PlaySessionId   string
 	RobloxSessionId string
 	RobloxClientId  string
@@ -131,4 +132,8 @@ type DropPacket struct {
 
 type KeyUpdatePacket struct {
 	Role string
+}
+
+type FreezePacket struct {
+	Seconds float64
 }

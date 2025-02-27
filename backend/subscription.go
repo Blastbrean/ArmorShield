@@ -32,6 +32,7 @@ type subscription struct {
 	logger       *slog.Logger
 	bootstrapper *bootstrapper
 	handshaker   *handshaker
+	freezer      *freezer
 	uuid         uuid.UUID
 	timestamp    time.Time
 	state        Bitmask
@@ -107,6 +108,12 @@ func (sub *subscription) read(ctx context.Context, conn *websocket.Conn) error {
 
 		if hr.packet() != pk.Id || !hr.state(sub) {
 			return errors.New("handler is not in the correct state")
+		}
+
+		if sub.freezer != nil && sub.freezer.state(sub) && sub.freezer.packet() == pk.Id {
+			if err := sub.freezer.handle(sub, pk); err != nil {
+				return err
+			}
 		}
 
 		err = hr.handle(sub, pk)

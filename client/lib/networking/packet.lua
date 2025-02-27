@@ -5,6 +5,7 @@
 ---| '3' Send the script to the client
 ---| '4' Connection is closing and we are being sent a reason
 ---| '5' Key data is being updated
+---| '6' Freeze detected packet
 
 ---@class packet
 ---@field Id packet_id
@@ -20,6 +21,7 @@ function packet.new(id, msg)
 	local self = setmetatable({}, { __index = packet })
 	self["Id"] = id
 	self["Msg"] = msg
+	self["Timestamp"] = os.time()
 
 	-- return new packet object
 	return self

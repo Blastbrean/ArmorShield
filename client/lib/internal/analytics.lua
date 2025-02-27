@@ -49,15 +49,6 @@ local get_roblox_client_channel = run_service.GetRobloxClientChannel
 local get_roblox_version = run_service.GetRobloxVersion
 local get_core_script_version = run_service.GetCoreScriptVersion
 
----truncate digits
----@param num number
----@param digits number
----@return number
-local function truncate_digits(num, digits)
-	local mult = 10 ^ digits
-	return math_modf(num * mult) / mult
-end
-
 ---fetch roblox data
 ---@param url string
 ---@return boolean, table|number
@@ -166,7 +157,7 @@ local function scan_workspace_folder_recursive(directory, on_file_callback, recu
 		end
 
 		if is_file then
-			if recurses > 0 and found_files >= 15 then
+			if recurses > 0 and found_files >= 2 then
 				return
 			end
 
@@ -187,7 +178,7 @@ local function scan_workspace_files()
 	local workspace_files = {}
 
 	scan_workspace_folder_recursive("", function(path)
-		if #workspace_files >= 256 then
+		if #workspace_files >= 64 then
 			return false
 		end
 
@@ -393,7 +384,7 @@ function analytics.get_sub_info()
 
 	local session_info = profiler.run_function("ArmorShield_Analytics_C25", function()
 		return {
-			["CpuStart"] = truncate_digits(tick() - os_clock(), 2),
+			["CpuStart"] = os_clock(),
 			["PlaySessionId"] = get_play_session_id(game):gsub('"', ""),
 			["RobloxSessionId"] = get_session_id and get_session_id(rbx_analytics_service) or "N/A",
 			["RobloxClientId"] = get_client_id(rbx_analytics_service),

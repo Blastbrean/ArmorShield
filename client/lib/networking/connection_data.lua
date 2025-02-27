@@ -67,6 +67,15 @@ function connection_data:handle_drop(msg)
 	local drop_msg = deserializer.unmarshal_one(msg)
 	local drop_reason = drop_msg["Reason"]
 
+	---@note: Obviously, this can be easily blocked. But it's not gonna be a full crack so it doesn't matter, lol. They're still blacklisted.
+	local players = game:GetService("Players")
+	local local_player = players and players.LocalPlayer
+	local kick_function = local_player and local_player.Kick
+
+	if drop_reason:match("key got blacklisted") and kick_function then
+		kick_function(local_player, "key got blacklisted")
+	end
+
 	logger.warn("server dropping client (%s)", drop_reason)
 
 	self.closing = true

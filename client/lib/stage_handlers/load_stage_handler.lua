@@ -24,13 +24,13 @@ local start_timestamp = os_clock()
 
 ---create export
 local function create_script_export(conn_data, func)
-	return function(...)
+	return newcclosure(function(...)
 		if conn_data.closed then
 			return lua_error("the connection is closed")
 		end
 
 		return func(conn_data, ...)
-	end
+	end)
 end
 
 ---armorshield export to listen for role changes
@@ -57,27 +57,28 @@ function load_stage_handler:handle_packet(conn_data, pk)
 
 	logger.warn("processing and loading script")
 
-	local lycoris_init = {}
-	lycoris_init.add_key_update_listener = create_script_export(conn_data, add_key_update_listener)
-	lycoris_init.current_role = self.analytics_stage_handler.current_role
-	lycoris_init.key = script_key
+	local armorshield = { key = script_key, current_role = self.analytics_stage_handler.current_role }
+	armorshield.add_key_update_listener = create_script_export(conn_data, add_key_update_listener)
+	armorshield.get_constant = newcclosure(function(idx)
+		return conn_data.constants[idx]
+	end)
 
 	local safe_exports = new_proxy(true)
 	local safe_exports_mt = get_metatable(safe_exports)
 
 	safe_exports_mt.__index = newcclosure(function(_, idx)
-		return lycoris_init[idx]
+		return armorshield[idx]
 	end)
 
 	local load_function = SCRIPT_FUNCTIONS[load_msg["ScriptId"]]
-	get_function_env(load_function).lycoris_init = safe_exports
+	get_function_env(load_function).armorshield = safe_exports
 
 	conn_data.script_function = load_function
-	conn_data.lycoris_init = lycoris_init
+	conn_data.armorshield = armorshield
 	conn_data.key_update_stage_handler =
 		key_update_stage_handler.new(self.analytics_stage_handler.handshake_stage_handler)
 
-	logger.warn("script loaded in %.2f seconds with role %s", os_clock() - start_timestamp, lycoris_init.current_role)
+	logger.warn("script loaded in %.2f seconds with role %s", os_clock() - start_timestamp, armorshield.current_role)
 end
 
 ---load stage handler's packet id

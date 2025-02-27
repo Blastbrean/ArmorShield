@@ -1,6 +1,6 @@
 -- cached functions
-local ws_connect, lua_pcall, task_spawn, task_wait, coroutine_status, load_string =
-	WebSocket.connect, pcall, task.spawn, task.wait, coroutine.status, loadstring
+local ws_connect, lua_pcall, task_spawn, task_wait, load_string =
+	WebSocket.connect, pcall, task.spawn, task.wait, loadstring
 
 -- lph macros
 if not LPH_OBFUSCATED then
@@ -161,10 +161,25 @@ local function handle_close()
 end
 
 ---handler loop
-local function handler_loop()
+---@param last_waited number
+local function handler_loop(last_waited)
 	handle_messages()
 	handle_packets()
 	handle_close()
+
+	-- Freeze and it's over 3 seconds? Improbable. Probably trying to dump the script and froze the Roblox.
+	if conn_data.handshake_stage_handler and last_waited >= 3 then
+		conn_data.handshake_stage_handler:send_message(conn_data, 7, {
+			["Seconds"] = last_waited,
+		})
+	end
+
+	-- Spawn script function.
+	if conn_data.script_function then
+		task_spawn(conn_data.script_function)
+	end
+
+	conn_data.script_function = nil
 end
 
 ---handle data as packets
@@ -173,9 +188,11 @@ on_message:Connect(function(data)
 	task_spawn(profiler.wrap_function("ArmorShield_OnMessage", function()
 		local handle_success, handle_error = lua_pcall(conn_data.handle_packet, conn_data, utility.to_byte_array(data))
 
-		if not handle_success then
-			logger.warn("error while handling packet (%s)", handle_error)
+		if handle_success then
+			return
 		end
+
+		logger.warn("error while handling packet (%s)", handle_error)
 	end))
 end)
 
@@ -189,27 +206,19 @@ end)
 -- log connection start & handler creation
 logger.warn("connection started")
 
--- handler loop
-while task_wait() do
-	local handle_success, handle_error = lua_pcall(profiler.wrap_function("ArmorShield_HandlerLoop", handler_loop))
+-- last seconds waited
+local last_waited = nil
 
-	if conn_data.script_function then
-		break
-	end
+-- handler loop
+while true do
+	local handle_success, handle_error = lua_pcall(profiler.wrap_function("ArmorShield_HandlerLoop", handler_loop), last_waited)
 
 	if handle_success then
 		continue
 	end
 
+	last_waited = task_wait()
+
 	logger.warn("handler loop return - loader stopping (%s)", handle_error)
 	break
-end
-
--- close client
-close_client(ws_client)
-
--- run script function if exists
-if conn_data.script_function then
-	logger.warn("script running (connection closed for stability)")
-	conn_data.script_function()
 end

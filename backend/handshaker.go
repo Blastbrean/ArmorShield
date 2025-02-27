@@ -144,6 +144,7 @@ func (hs handshaker) handle(sub *subscription, pk Packet) error {
 
 	sub.state.AddFlag(STATE_HANDSHAKED)
 	sub.handshaker = &hs
+	sub.freezer = &freezer{hs: hs}
 	sub.handler = identifier{hs: hs}
 
 	return sub.message(Message{Id: PacketIdHandshake, Data: HandshakeResponse{
