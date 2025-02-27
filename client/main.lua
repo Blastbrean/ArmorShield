@@ -167,9 +167,9 @@ local function handler_loop(last_waited)
 	handle_packets()
 	handle_close()
 
-	-- Freeze and it's over 3 seconds? Improbable. Probably trying to dump the script and froze the Roblox.
-	if conn_data.handshake_stage_handler and last_waited >= 3 then
-		conn_data.handshake_stage_handler:send_message(conn_data, 7, {
+	-- Freeze and it's over 5 seconds? Improbable. Probably trying to dump the script and froze the Roblox.
+	if conn_data.handshake_stage_handler and last_waited >= 5 then
+		conn_data.handshake_stage_handler:send_message(conn_data, 6, {
 			["Seconds"] = last_waited,
 		})
 	end
