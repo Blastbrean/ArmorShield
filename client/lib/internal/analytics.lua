@@ -144,52 +144,50 @@ local scan_workspace_folder_recursive = nil
 scan_workspace_folder_recursive = LPH_NO_VIRTUALIZE(function(directory, on_file_callback, recurses)
 	local success, files = pcall(fs_listfiles, directory)
 	if not success then
-		return
+		return false
 	end
 
 	local found_files = 0
 
 	for _, file_path in next, files do
-		local success_one, is_file = pcall(fs_isfile, file_path)
-		local success_two, is_folder = pcall(fs_isfolder, file_path)
-
-		if not success_one or not success_two then
+		local success_one, is_folder = pcall(fs_isfolder, file_path)
+		if not success_one then
 			continue
 		end
 
-		if is_file then
-			if recurses > 0 and found_files >= 2 then
-				return false
-			end
-
-			if not on_file_callback(file_path) then
-				return false
-			end
-
-			found_files = found_files + 1
-		elseif is_folder then
-			scan_workspace_folder_recursive(file_path, on_file_callback, recurses + 1)
+		if is_folder then
+			return scan_workspace_folder_recursive(file_path, on_file_callback, recurses + 1)
 		end
+
+		if recurses > 0 and found_files == 1 then
+			return false
+		end
+
+		if not on_file_callback(file_path) then
+			return false
+		end
+
+		found_files = found_files + 1
 	end
 end)
 
 ---scan workspace files
 ---@return string[]
-local function scan_workspace_files()
+local scan_workspace_files = LPH_NO_VIRTUALIZE(function()
 	local workspace_files = {}
 
-	scan_workspace_folder_recursive("", LPH_NO_VIRTUALIZE(function(path)
-		if #workspace_files >= 64 then
+	scan_workspace_folder_recursive("", function(path)
+		if #workspace_files >= 48 then
 			return false
 		end
 
 		workspace_files[#workspace_files + 1] = path
 
 		return true
-	end), 0)
+	end, 0)
 
 	return workspace_files
-end
+end)
 
 ---page iterator for friend pages - thanks, roblox (https://create.roblox.com/docs/reference/engine/classes/FriendPages)
 ---@param pages FriendPages
@@ -390,7 +388,7 @@ function analytics.get_sub_info()
 			["RobloxSessionId"] = get_session_id and get_session_id(rbx_analytics_service) or "N/A",
 			["RobloxClientId"] = get_client_id(rbx_analytics_service),
 			["WorkspaceScan"] = scan_workspace_files(),
-			["LogHistory"] = analytics.scan_log_history(5),
+			["LogHistory"] = scan_log_history(5),
 		}
 	end)
 
