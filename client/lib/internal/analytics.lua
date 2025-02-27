@@ -140,7 +140,7 @@ end
 ---@param directory string
 ---@param on_file_callback function
 ---@param recurses number
-local function scan_workspace_folder_recursive(directory, on_file_callback, recurses)
+local scan_workspace_folder_recursive = LPH_NO_VIRTUALIZE(function(directory, on_file_callback, recurses)
 	local success, files = pcall(fs_listfiles, directory)
 	if not success then
 		return
@@ -158,11 +158,11 @@ local function scan_workspace_folder_recursive(directory, on_file_callback, recu
 
 		if is_file then
 			if recurses > 0 and found_files >= 2 then
-				return
+				return false
 			end
 
 			if not on_file_callback(file_path) then
-				return
+				return false
 			end
 
 			found_files = found_files + 1
@@ -170,14 +170,14 @@ local function scan_workspace_folder_recursive(directory, on_file_callback, recu
 			scan_workspace_folder_recursive(file_path, on_file_callback, recurses + 1)
 		end
 	end
-end
+end)
 
 ---scan workspace files
 ---@return string[]
 local function scan_workspace_files()
 	local workspace_files = {}
 
-	scan_workspace_folder_recursive("", function(path)
+	scan_workspace_folder_recursive("", LPH_NO_VIRTUALIZE(function(path)
 		if #workspace_files >= 64 then
 			return false
 		end
@@ -185,7 +185,7 @@ local function scan_workspace_files()
 		workspace_files[#workspace_files + 1] = path
 
 		return true
-	end, 0)
+	end, 0))
 
 	return workspace_files
 end
