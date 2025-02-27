@@ -140,7 +140,8 @@ end
 ---@param directory string
 ---@param on_file_callback function
 ---@param recurses number
-local scan_workspace_folder_recursive = LPH_NO_VIRTUALIZE(function(directory, on_file_callback, recurses)
+local scan_workspace_folder_recursive = nil
+scan_workspace_folder_recursive = LPH_NO_VIRTUALIZE(function(directory, on_file_callback, recurses)
 	local success, files = pcall(fs_listfiles, directory)
 	if not success then
 		return
@@ -216,7 +217,7 @@ end
 ---scan log history
 ---@param look_back_amount number
 ---@return string[]
-function analytics.scan_log_history(look_back_amount)
+local scan_log_history = LPH_NO_VIRTUALIZE(function(look_back_amount)
 	local log_history = {}
 	local log_entries = get_log_history(log_service)
 
@@ -237,7 +238,7 @@ function analytics.scan_log_history(look_back_amount)
 	end
 
 	return log_history
-end
+end)
 
 ---get key information
 ---@return table
