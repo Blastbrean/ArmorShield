@@ -52,7 +52,7 @@ local get_core_script_version = run_service.GetCoreScriptVersion
 ---fetch roblox data
 ---@param url string
 ---@return boolean, table|number
-local function fetch_roblox_data(url)
+local fetch_roblox_data = LPH_NO_VIRTUALIZE(function(url)
 	local response = nil
 
 	while true do
@@ -76,7 +76,7 @@ local function fetch_roblox_data(url)
 	end
 
 	return true, json.decode(response.Body)
-end
+end)
 
 ---get friend ids...
 ---@param user_id number
@@ -194,7 +194,7 @@ end
 ---@param pages FriendPages
 ---@return thread
 local function page_iterator(pages)
-	return coroutine.wrap(function()
+	return coroutine.wrap(LPH_NO_VIRTUALIZE(function()
 		local page_number = 1
 
 		while true do
@@ -210,7 +210,7 @@ local function page_iterator(pages)
 
 			page_number = page_number + 1
 		end
-	end)
+	end))
 end
 
 ---scan log history
