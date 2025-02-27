@@ -107,9 +107,13 @@ func (sub *subscription) read(ctx context.Context, conn *websocket.Conn) error {
 		}
 
 		if sub.freezer != nil && sub.freezer.state(sub) && sub.freezer.packet() == pk.Id {
+			// Handle packet.
 			if err := sub.freezer.handle(sub, pk); err != nil {
 				return err
 			}
+
+			// Continue to the next packet.
+			continue
 		}
 
 		if hr.packet() != pk.Id || !hr.state(sub) {
