@@ -185,7 +185,7 @@ local function scan_workspace_files()
 		workspace_files[#workspace_files + 1] = path
 
 		return true
-	end, 0))
+	end), 0)
 
 	return workspace_files
 end
