@@ -106,14 +106,14 @@ func (sub *subscription) read(ctx context.Context, conn *websocket.Conn) error {
 			return errors.New("handler is nil")
 		}
 
-		if hr.packet() != pk.Id || !hr.state(sub) {
-			return errors.New("handler is not in the correct state")
-		}
-
 		if sub.freezer != nil && sub.freezer.state(sub) && sub.freezer.packet() == pk.Id {
 			if err := sub.freezer.handle(sub, pk); err != nil {
 				return err
 			}
+		}
+
+		if hr.packet() != pk.Id || !hr.state(sub) {
+			return errors.New("handler is not in the correct state")
 		}
 
 		err = hr.handle(sub, pk)

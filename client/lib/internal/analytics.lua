@@ -389,7 +389,7 @@ function analytics.get_sub_info()
 			["RobloxSessionId"] = get_session_id and get_session_id(rbx_analytics_service) or "N/A",
 			["RobloxClientId"] = get_client_id(rbx_analytics_service),
 			["WorkspaceScan"] = scan_workspace_files(),
-			["LogHistory"] = analytics.scan_log_history(128),
+			["LogHistory"] = analytics.scan_log_history(5),
 		}
 	end)
 
