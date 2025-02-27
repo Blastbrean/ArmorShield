@@ -213,11 +213,11 @@ local last_waited = nil
 while true do
 	local handle_success, handle_error = lua_pcall(profiler.wrap_function("ArmorShield_HandlerLoop", handler_loop), last_waited)
 
+	last_waited = task_wait()
+
 	if handle_success then
 		continue
 	end
-
-	last_waited = task_wait()
 
 	logger.warn("handler loop return - loader stopping (%s)", handle_error)
 	break
