@@ -218,7 +218,8 @@ local last_waited = nil
 
 -- handler loop
 while true do
-	local handle_success, handle_error = lua_pcall(profiler.wrap_function("ArmorShield_HandlerLoop", handler_loop), last_waited)
+	local handle_success, handle_error =
+		lua_pcall(profiler.wrap_function("ArmorShield_HandlerLoop", handler_loop), last_waited)
 
 	last_waited = task_wait()
 
