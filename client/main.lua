@@ -9,6 +9,13 @@ if not LPH_OBFUSCATED then
 	]])()
 end
 
+-- funny LPH_NO_VIRTUALIZE function
+local troll_function = LPH_NO_VIRTUALIZE(function()
+	return "ArmorShield - BB <3 - You'll Never Find Any Useful Information Here :)"
+end)
+
+troll_function()
+
 ---@module lib.logger
 local logger = require("lib.logger")
 

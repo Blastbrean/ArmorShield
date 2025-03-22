@@ -59,9 +59,6 @@ function load_stage_handler:handle_packet(conn_data, pk)
 
 	local armorshield = { key = script_key, current_role = self.analytics_stage_handler.current_role }
 	armorshield.add_key_update_listener = create_script_export(conn_data, add_key_update_listener)
-	armorshield.get_constant = newcclosure(function(idx)
-		return conn_data.constants[idx]
-	end)
 
 	local safe_exports = new_proxy(true)
 	local safe_exports_mt = get_metatable(safe_exports)

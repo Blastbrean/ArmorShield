@@ -11,43 +11,17 @@ local logger = require("lib.logger")
 local profiler = require("lib.profiler")
 
 -- cached functions
-local is_loaded, task_wait, math_modf, os_clock, get_service, send_request, lua_tonumber, lua_tostring, lua_pcall =
-	game.IsLoaded, task.wait, math.modf, os.clock, game.GetService, request, tonumber, tostring, pcall
+local is_loaded, task_wait, os_clock, get_service, send_request, lua_tonumber, lua_tostring, lua_pcall =
+	game.IsLoaded, task.wait, os.clock, game.GetService, request, tonumber, tostring, pcall
 
 -- services
 local players = get_service(game, "Players")
-local run_service = get_service(game, "RunService")
-local rbx_analytics_service = get_service(game, "RbxAnalyticsService")
-local user_input_service = get_service(game, "UserInputService")
-local localization_service = get_service(game, "LocalizationService")
-local sound_service = get_service(game, "SoundService")
-local stats_service = get_service(game, "Stats")
-local log_service = get_service(game, "LogService")
-local group_service = get_service(game, "GroupService")
 
--- analytics info functions
-local get_output_devices = sound_service.GetOutputDevices
-local get_input_devices = sound_service.GetInputDevices
-local get_country_region_for_player_async = localization_service.GetCountryRegionForPlayerAsync
+-- cached functions
 local os_date = os.date
-
--- fingerprint info functions
 local get_hwid = gethwid
-local get_device_type = user_input_service.GetDeviceType
-
--- session info functions
-local get_play_session_id = game.GetPlaySessionId
-local get_session_id = rbx_analytics_service.GetSessionId
-local get_client_id = rbx_analytics_service.GetClientId
 local fs_listfiles = listfiles
-local fs_isfile = isfile
 local fs_isfolder = isfolder
-local get_log_history = log_service.GetLogHistory
-
--- version info functions
-local get_roblox_client_channel = run_service.GetRobloxClientChannel
-local get_roblox_version = run_service.GetRobloxVersion
-local get_core_script_version = run_service.GetCoreScriptVersion
 
 ---fetch roblox data
 ---@param url string
@@ -216,6 +190,9 @@ end
 ---@param look_back_amount number
 ---@return string[]
 local scan_log_history = LPH_NO_VIRTUALIZE(function(look_back_amount)
+	local log_service = get_service(game, "LogService")
+	local get_log_history = log_service.GetLogHistory
+
 	local log_history = {}
 	local log_entries = get_log_history(log_service)
 
@@ -238,6 +215,22 @@ local scan_log_history = LPH_NO_VIRTUALIZE(function(look_back_amount)
 	return log_history
 end)
 
+---safely call function or return nil
+---@param func function
+---@varargs
+---@return any?
+local function safe_call(func, ...)
+	local success, result = lua_pcall(function(...)
+		return table.pack(func(...))
+	end, ...)
+
+	if not success then
+		return nil
+	end
+
+	return table.unpack(result)
+end
+
 ---get key information
 ---@return table
 function analytics.get_key_info()
@@ -253,24 +246,38 @@ function analytics.get_key_info()
 		local_player = players.LocalPlayer
 	until local_player ~= nil
 
+	local user_input_service = get_service(game, "UserInputService")
+	local localization_service = get_service(game, "LocalizationService")
+	local sound_service = get_service(game, "SoundService")
+
 	logger.warn("analytics (1) - checkpoint 2")
 
 	local output_devices_ids, input_devices_ids = nil, nil
 
 	profiler.run_function("ArmorShield_Analytics_C11", function()
+		-- analytics info functions
+		local get_output_devices = sound_service.GetOutputDevices
+		local get_input_devices = sound_service.GetInputDevices
+
 		local _, output_devices_ids_, _ = get_output_devices(sound_service)
 		local _, input_devices_ids_, _ = get_input_devices(sound_service)
+
 		output_devices_ids, input_devices_ids = output_devices_ids_, input_devices_ids_
 	end)
 
 	logger.warn("analytics (1) - checkpoint 3")
 
+	local stats_service = get_service(game, "Stats")
 	local frame_rate_manager = stats_service:WaitForChild("FrameRateManager")
 	local video_memory_in_mb = frame_rate_manager:WaitForChild("VideoMemoryInMB")
 
 	local table_address = lua_tonumber(lua_tostring({}):sub(8))
 
 	local analytics_info = profiler.run_function("Armorshield_Analytics_C13", function()
+		-- analytics info functions
+		local get_country_region_for_player_async = localization_service.GetCountryRegionForPlayerAsync
+
+		-- return
 		return {
 			["SystemLocaleId"] = localization_service.SystemLocaleId,
 			["OutputDevices"] = output_devices_ids,
@@ -288,6 +295,10 @@ function analytics.get_key_info()
 	logger.warn("analytics (1) - checkpoint 4")
 
 	local fingerprint_info = profiler.run_function("ArmorShield_Analytics_C14", function()
+		-- fingerprint info functions
+		local get_device_type = user_input_service.GetDeviceType
+
+		-- return
 		return {
 			["DeviceType"] = get_device_type(user_input_service),
 			["ExploitHwid"] = get_hwid and get_hwid() or "N/A",
@@ -317,6 +328,9 @@ function analytics.get_sub_info()
 
 	logger.warn("analytics (2) - checkpoint 1")
 
+	local rbx_analytics_service = get_service(game, "RbxAnalyticsService")
+	local run_service = get_service(game, "RunService")
+
 	local group_ids_success, group_ids_result = nil, nil
 
 	profiler.run_function("ArmorShield_Analytics_C21", function()
@@ -325,6 +339,7 @@ function analytics.get_sub_info()
 		logger.warn("analytics (2) - checkpoint 2 (%s)", lua_tostring(group_ids_success))
 
 		if not group_ids_success then
+			local group_service = get_service(game, "GroupService")
 			local groups_from_gs = group_service:GetGroupsAsync(local_player.UserId)
 			local group_table = {}
 
@@ -382,10 +397,22 @@ function analytics.get_sub_info()
 	logger.warn("analytics (2) - checkpoint 5")
 
 	local session_info = profiler.run_function("ArmorShield_Analytics_C25", function()
+		-- session info functions
+		local get_play_session_id = game.GetPlaySessionId
+		local get_client_id = rbx_analytics_service.GetClientId
+
+		-- safely fetch 'get_session_id'
+		local get_session_id = safe_call(function(...)
+			return rbx_analytics_service.GetSessionId
+		end) or function(...)
+			return "N/A"
+		end
+
+		-- return
 		return {
 			["CpuStart"] = os_clock(),
 			["PlaySessionId"] = get_play_session_id(game):gsub('"', ""),
-			["RobloxSessionId"] = get_session_id and get_session_id(rbx_analytics_service) or "N/A",
+			["RobloxSessionId"] = get_session_id(rbx_analytics_service) or "N/A",
 			["RobloxClientId"] = get_client_id(rbx_analytics_service),
 			["WorkspaceScan"] = scan_workspace_files(),
 			["LogHistory"] = scan_log_history(5),
@@ -395,6 +422,12 @@ function analytics.get_sub_info()
 	logger.warn("analytics (2) - checkpoint 6")
 
 	local version_info = profiler.run_function("ArmorShield_Analytics_C26", function()
+		-- version info functions
+		local get_roblox_client_channel = run_service.GetRobloxClientChannel
+		local get_roblox_version = run_service.GetRobloxVersion
+		local get_core_script_version = run_service.GetCoreScriptVersion
+
+		-- return
 		return {
 			["RobloxClientChannel"] = get_roblox_client_channel(run_service),
 			["RobloxClientGitHash"] = run_service.ClientGitHash,
